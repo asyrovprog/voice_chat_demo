@@ -11,19 +11,11 @@ internal static class Program
 {
     internal static async Task Main(string[] args)
     {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+        var builder = Host.CreateApplicationBuilder(args);
 
-        builder.Services.AddOptions<OpenAIOptions>()
-            .Bind(builder.Configuration.GetSection(OpenAIOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        builder.Services.AddOptions<ChatOptions>()
-            .Bind(builder.Configuration.GetSection(ChatOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        // AudioOptions no longer needs configuration binding - uses constants
+        // Adding configuration from appsettings.json and environment variables
+        builder.Services.ConfigureOptions<OpenAIOptions>(OpenAIOptions.SectionName);
+        builder.Services.ConfigureOptions<ChatOptions>(ChatOptions.SectionName);
 
         // Configure Semantic Kernel in DI container
         builder.Services
@@ -46,6 +38,8 @@ internal static class Program
         builder.Services.AddTransient<VoiceChatPipeline>();
 
         using var host = builder.Build();
+
+        // Setting up graceful shutdown on Ctrl+C
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -53,7 +47,15 @@ internal static class Program
             cts.Cancel();
         };
 
+        // Run the voice chat pipeline
         using var pipeline = host.Services.GetRequiredService<VoiceChatPipeline>();
         await pipeline.RunAsync(cts.Token);
     }
+
+    private static void ConfigureOptions<TOptions>(this IServiceCollection services, string sectionName) where TOptions : class =>
+            services
+                .AddOptions<TOptions>()
+                .BindConfiguration(sectionName)
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
 }

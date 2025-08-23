@@ -7,9 +7,9 @@ using Microsoft.Extensions.Options;
 public class VoiceChatPipeline : IDisposable
 {
     // Pipeline configuration constants
-    private const int MaxDegreeOfParallelism = 1;    // Number of parallel operations in dataflow blocks
-    private const int BoundedCapacity = 5;           // Maximum capacity for dataflow block buffers
-    private const bool EnsureOrdered = true;         // Ensure order preservation in pipeline
+    private const int MaxDegreeOfParallelism = 1; // Number of parallel operations in dataflow blocks
+    private const int BoundedCapacity = 5; // Maximum capacity for dataflow block buffers
+    private const bool EnsureOrdered = true; // Ensure order preservation in pipeline
     
     // Dataflow options fields - initialized inline
     private readonly ExecutionDataflowBlockOptions _executionOptions = new()
@@ -19,11 +19,7 @@ public class VoiceChatPipeline : IDisposable
         EnsureOrdered = EnsureOrdered
     };
 
-    private readonly DataflowLinkOptions _linkOptions = new()
-    { 
-        PropagateCompletion = true 
-    };
-    
+    private readonly DataflowLinkOptions _linkOptions = new() {  PropagateCompletion = true };
     private readonly ILogger<VoiceChatPipeline> _logger;
     private readonly AudioPlaybackService _audioPlaybackService;
     private readonly SpeechToTextService _speechToTextService;
@@ -68,10 +64,10 @@ public class VoiceChatPipeline : IDisposable
         var playbackBlock = new ActionBlock<SpeechEvent>(_audioPlaybackService.PipelineActionAsync, _executionOptions);
 
         // Connect the blocks in the pipeline
-        LinkWithFilter(vadBlock, sttBlock, "VAD", audioData => audioData.Data.Length > 0);
-        LinkWithFilter(sttBlock, chatBlock, "STT", t => !string.IsNullOrEmpty(t));
-        LinkWithFilter(chatBlock, ttsBlock, "Chat", t => !string.IsNullOrEmpty(t));
-        LinkWithFilter(ttsBlock, playbackBlock, "TTS", t => t.Length > 0);
+        Link(vadBlock, sttBlock, "VAD", audioData => audioData.Data.Length > 0);
+        Link(sttBlock, chatBlock, "STT", t => !string.IsNullOrEmpty(t));
+        Link(chatBlock, ttsBlock, "Chat", t => !string.IsNullOrEmpty(t));
+        Link(ttsBlock, playbackBlock, "TTS", t => t.Length > 0);
 
         _logger.LogInformation("Voice Chat started. You can start conversation now, or press Ctrl+C to exit.");
 
@@ -85,7 +81,7 @@ public class VoiceChatPipeline : IDisposable
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInterrupted();
+            _logger.LogInformation("Voice Chat pipeline stopping due to cancellation...");
         }
         finally
         {
@@ -117,7 +113,7 @@ public class VoiceChatPipeline : IDisposable
         return true;
     }
 
-    private void LinkWithFilter<T>(
+    private void Link<T>(
         ISourceBlock<PipelineEvent<T>> source, 
         ITargetBlock<PipelineEvent<T>> target, 
         string blockName, 
@@ -127,6 +123,5 @@ public class VoiceChatPipeline : IDisposable
         DiscardFiltered(source, blockName);
     }
 
-    private void DiscardFiltered<T>(ISourceBlock<PipelineEvent<T>> block, string blockName) =>
-        block.LinkTo(DataflowBlock.NullTarget<PipelineEvent<T>>(), _linkOptions, evt => FilterDiscarded(evt, blockName));
+    private void DiscardFiltered<T>(ISourceBlock<PipelineEvent<T>> block, string blockName) => block.LinkTo(DataflowBlock.NullTarget<PipelineEvent<T>>(), _linkOptions, evt => FilterDiscarded(evt, blockName));
 }

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft. All rights reserved.
+
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -26,13 +28,11 @@ public static class Tools
             var resultInfo = resultFormatter?.Invoke(result) ?? result?.ToString() ?? "";
             if (string.IsNullOrEmpty(resultInfo))
             {
-                logger.LogInformation("{OperationName} completed in {Duration:F4}sec", 
-                    operationName, timer.Elapsed.TotalSeconds);
+                logger.LogInformation("{OperationName} completed in {Duration:F4}sec", operationName, timer.Elapsed.TotalSeconds);
             }
             else
             {
-                logger.LogInformation("{OperationName} completed in {Duration:F4}sec: {Result}", 
-                    operationName, timer.Elapsed.TotalSeconds, resultInfo);
+                logger.LogInformation("{OperationName} completed in {Duration:F4}sec: {Result}", operationName, timer.Elapsed.TotalSeconds, resultInfo);
             }
 
             return result;

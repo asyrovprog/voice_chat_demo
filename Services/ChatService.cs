@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft. All rights reserved.
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -51,15 +53,15 @@ public class ChatService
         }
 
         var buffer = "";
-        _logger.LogInformation($"CHAT in: {input}");
+        _logger.LogInformation($"USER: {input}");
         _chatHistory.AddUserMessage(input);
 
         await foreach (var result in _chatCompletionService.GetStreamingChatMessageContentsAsync(_chatHistory, _options, cancellationToken: token))
         {
             buffer += result?.Content ?? string.Empty;
-            if (buffer.Length > _chatOptions.StreamingChunkSizeThreshold && (buffer[^1] == '.' || buffer[^1] == '?' || buffer[^1] == '!'))
+            if (buffer.Length >= _chatOptions.StreamingChunkSizeThreshold && (buffer[^1] == '.' || buffer[^1] == '?' || buffer[^1] == '!'))
             {
-                _logger.LogInformation($"CHAT out delta: {buffer}");
+                _logger.LogInformation($"LLM delta: {buffer}");
                 yield return buffer;
                 buffer = string.Empty;
             }
@@ -67,7 +69,7 @@ public class ChatService
 
         if (!string.IsNullOrWhiteSpace(buffer))
         {
-            _logger.LogInformation($"CHAT out delta: {buffer}");
+            _logger.LogInformation($"LLM delta: {buffer}");
             yield return buffer;
         }
     }

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft. All rights reserved.
+
 public class TurnManager : IDisposable
 {
     private int _currentTurnId = 0;

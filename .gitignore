@@ -1,19 +1,71 @@
-# Ignore Visual Studio working folder
-.vs/
-
-# Build outputs
+### .NET build artifacts
 bin/
 obj/
+[Bb]uild/
+[Ll]og/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+*.exe
+*.dll
+*.pdb
+*.mdb
+*.cache
+*.log
+*.userprefs
+*.nuget/
+*.nupkg
 
-# User-specific files
+# Visual Studio generated
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
 
-# Rider / other IDEs (optional)
+# Visual Studio Code
+.vscode/
+.history/
+*.code-workspace
+
+# JetBrains Rider / IntelliJ
 .idea/
 *.iml
 
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test results
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+*.opencover.xml
+
+# Package restore
+project.lock.json
+*.lock.json
+packages/
+.nuget/
+
+# Tooling caches
+*.vs/
+.vs/
+*.vscode/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.dotCover
+
 # Logs
 *.log
+
+# Others
+*.dbmdl
+*.bak
+*.swp
+*.swn
+*.swm
+*.swo

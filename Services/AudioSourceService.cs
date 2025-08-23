@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft. All rights reserved.
+
 using System.Runtime.CompilerServices;
 using NAudio.Wave;
 using Microsoft.Extensions.Logging;
@@ -14,10 +16,10 @@ public class AudioSourceService
     public AudioSourceService(ILogger<AudioSourceService> logger)
     {
         _logger = logger;
-        
+
         // Calculate frame size in bytes: (samples/sec * channels * bits/sample * milliseconds) / (bits/byte * ms/sec)
         _frameBytes = (AudioOptions.SampleRate * AudioOptions.Channels * AudioOptions.BitsPerSample * AudioOptions.BufferMilliseconds) / (BitsPerByte * MillisecondsPerSecond);
-        
+
         _waveFormat = new WaveFormat(AudioOptions.SampleRate, AudioOptions.BitsPerSample, AudioOptions.Channels);
     }
 
