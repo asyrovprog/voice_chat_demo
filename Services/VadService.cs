@@ -30,9 +30,9 @@ public class VadService : IDisposable
     /// </summary>
     /// <param name="audioChunkEvent">Audio chunk event from the pipeline.</param>
     /// <returns>Audio events when speech segments are detected.</returns>
-    public async IAsyncEnumerable<AudioEvent> TransformAsync(AudioChunkEvent audioChunkEvent)
+    public IEnumerable<AudioEvent> Transform(AudioChunkEvent audioChunkEvent)
     {
-        await foreach (var audioEvent in ProcessAudioChunkAsync(audioChunkEvent.Payload))
+        foreach (var audioEvent in ProcessAudioChunk(audioChunkEvent.Payload))
         {
             yield return audioEvent;
         }
@@ -53,9 +53,9 @@ public class VadService : IDisposable
     /// </summary>
     /// <param name="audioChunk">Raw audio chunk from microphone.</param>
     /// <returns>Audio events when speech segments are detected.</returns>
-    public async IAsyncEnumerable<AudioEvent> TransformAsync(byte[] audioChunk)
+    public IEnumerable<AudioEvent> Transform(byte[] audioChunk)
     {
-        await foreach (var audioEvent in ProcessAudioChunkAsync(audioChunk))
+        foreach (var audioEvent in ProcessAudioChunk(audioChunk))
         {
             yield return audioEvent;
         }
@@ -66,7 +66,7 @@ public class VadService : IDisposable
     /// </summary>
     /// <param name="audioChunk">Raw audio chunk to process.</param>
     /// <returns>Audio events when speech segments are detected.</returns>
-    private async IAsyncEnumerable<AudioEvent> ProcessAudioChunkAsync(byte[] audioChunk)
+    private IEnumerable<AudioEvent> ProcessAudioChunk(byte[] audioChunk)
     {
         bool voiced = HasSpeech(audioChunk); // audioChunk expected to be in 20ms chunks
         
@@ -106,9 +106,6 @@ public class VadService : IDisposable
                 _silenceFrames = 0;
             }
         }
-
-        // Allow other async operations to proceed
-        await Task.Yield();
     }
 
     public bool HasSpeech(byte[] frame20ms) => _vad.HasSpeech(frame20ms, SampleRate.Is16kHz, FrameLength.Is20ms);

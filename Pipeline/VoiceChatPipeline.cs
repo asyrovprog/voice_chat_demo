@@ -56,14 +56,14 @@ public class VoiceChatPipeline : IDisposable
         _turnManager = turnManager;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Create pipeline blocks - VAD now accepts raw audio chunks directly
-        var vadBlock = DataflowBlocks.TransformToManyAsync<byte[], AudioEvent>(_vadService.TransformAsync, _executionOptions, logger: _logger);
+        var vadBlock = new TransformManyBlock<byte[], AudioEvent>(_vadService.Transform, _executionOptions);
         var sttBlock = new TransformBlock<AudioEvent, TranscriptionEvent>(_speechToTextService.TransformAsync, _executionOptions);
-        var chatBlock = DataflowBlocks.TransformToManyAsync<TranscriptionEvent, ChatEvent>(_chatService.TransformAsync, _executionOptions, logger: _logger);
+        var chatBlock = new TransformManyBlock<TranscriptionEvent, ChatEvent>(_chatService.TransformAsync, _executionOptions);
         var ttsBlock = new TransformBlock<ChatEvent, SpeechEvent>(_textToSpeechService.TransformAsync, _executionOptions);
         var playbackBlock = new ActionBlock<SpeechEvent>(_audioPlaybackService.PipelineActionAsync, _executionOptions);
 
@@ -77,7 +77,7 @@ public class VoiceChatPipeline : IDisposable
 
         try
         {
-            // Feed audio chunks directly into the VAD pipeline block
+            // Keep feeding audio chunks into the VAD pipeline block till RunAsync is not cancelled
             await foreach (var audioChunk in _audioSourceService.GetAudioChunksAsync(_cancellationTokenSource.Token))
             {
                 await vadBlock.SendAsync(audioChunk, _cancellationTokenSource.Token);

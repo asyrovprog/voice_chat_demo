@@ -3,11 +3,10 @@ using System.Diagnostics;
 
 public static class Tools
 {
-    // Logs a warning message indicating that an operation (such as playback) was interrupted by user voice.
-    public static void LogInterrupted(this ILogger logger) => 
-        logger.LogWarning("Operation is cancelled by user interrupt.");
+    // logs a warning message indicating that an operation (such as playback) was interrupted by user voice.
+    public static void LogInterrupted(this ILogger logger) => logger.LogWarning("Operation is cancelled by user interrupt.");
 
-    // Executes a pipeline operation with automatic timing, logging, and error handling.
+    // Executes a pipeline operation with latency logging and error handling
     public static async Task<T> ExecutePipelineOperationAsync<T>(
         Func<Task<T>> operation,
         string operationName,

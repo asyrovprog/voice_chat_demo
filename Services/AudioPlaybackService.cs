@@ -43,7 +43,7 @@ public class AudioPlaybackService(ILogger<AudioPlaybackService> logger) : IDispo
             _isPlaying = true;
             _waveOut.Play();
 
-            _logger.LogInformation("Audio playback started. You can speak to interrupt.");
+            _logger.LogInformation("Audio chunk playback started. You can speak to interrupt.");
 
             // Wait for playback to complete or cancellation
             await using (cancellationToken.Register(() =>

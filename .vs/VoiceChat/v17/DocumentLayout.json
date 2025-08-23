@@ -1,16 +1,215 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\local\\git\\voice_chat_demo\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\services\\audioplaybackservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:services\\audioplaybackservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\options\\openaioptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:options\\openaioptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\options\\chatoptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:options\\chatoptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\options\\audiooptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:options\\audiooptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\utilities\\tools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:utilities\\tools.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\pipeline\\voicechatpipeline.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:pipeline\\voicechatpipeline.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\services\\chatservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:services\\chatservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\pipeline\\pipelineevents.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:pipeline\\pipelineevents.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\services\\texttospeechservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:services\\texttospeechservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\services\\vadservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:services\\vadservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\syrovandrew\\AppData\\Local\\SourceServer\\ca99552f8860c479c04d232bd8645affe2dab8d80ba060031f60b8b898ad46e7\\src\\libraries\\Microsoft.Extensions.Options\\src\\OptionsFactory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|c:\\local\\git\\voice_chat_demo\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}|",
+      "RelativeMoniker": "D:0:0:{39FA2091-D1DA-6DFD-03A3-A0C6781B9BDD}|VoiceChat.csproj|solutionrelative:.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}|"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
       "DocumentGroups": [
         {
-          "DockedWidth": 200,
-          "SelectedChildIndex": -1,
+          "DockedWidth": 269,
+          "SelectedChildIndex": 1,
           "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": ".gitignore",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\.gitignore",
+              "RelativeDocumentMoniker": ".gitignore",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\.gitignore",
+              "RelativeToolTip": ".gitignore",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-08-23T17:41:57.333Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "AudioPlaybackService.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Services\\AudioPlaybackService.cs",
+              "RelativeDocumentMoniker": "Services\\AudioPlaybackService.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Services\\AudioPlaybackService.cs",
+              "RelativeToolTip": "Services\\AudioPlaybackService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAC0AAAAwAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:40:18.971Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "OpenAIOptions.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Options\\OpenAIOptions.cs",
+              "RelativeDocumentMoniker": "Options\\OpenAIOptions.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Options\\OpenAIOptions.cs",
+              "RelativeToolTip": "Options\\OpenAIOptions.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:36:53.632Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "ChatOptions.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Options\\ChatOptions.cs",
+              "RelativeDocumentMoniker": "Options\\ChatOptions.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Options\\ChatOptions.cs",
+              "RelativeToolTip": "Options\\ChatOptions.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:36:46.591Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "AudioOptions.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Options\\AudioOptions.cs",
+              "RelativeDocumentMoniker": "Options\\AudioOptions.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Options\\AudioOptions.cs",
+              "RelativeToolTip": "Options\\AudioOptions.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAgwAIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:36:10.101Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Tools.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Utilities\\Tools.cs",
+              "RelativeDocumentMoniker": "Utilities\\Tools.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Utilities\\Tools.cs",
+              "RelativeToolTip": "Utilities\\Tools.cs",
+              "ViewState": "AgIAAA4AAAAAAAAAAAAmwAUAAABsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:30:55.375Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "PipelineEvents.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Pipeline\\PipelineEvents.cs",
+              "RelativeDocumentMoniker": "Pipeline\\PipelineEvents.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Pipeline\\PipelineEvents.cs",
+              "RelativeToolTip": "Pipeline\\PipelineEvents.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:22:32.645Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "TextToSpeechService.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Services\\TextToSpeechService.cs",
+              "RelativeDocumentMoniker": "Services\\TextToSpeechService.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Services\\TextToSpeechService.cs",
+              "RelativeToolTip": "Services\\TextToSpeechService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:22:24.032Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ChatService.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Services\\ChatService.cs",
+              "RelativeDocumentMoniker": "Services\\ChatService.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Services\\ChatService.cs",
+              "RelativeToolTip": "Services\\ChatService.cs",
+              "ViewState": "AgIAACcAAAAAAAAAAAA1wCsAAAArAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:20:26.371Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\appsettings.json",
+              "RelativeDocumentMoniker": "appsettings.json",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\appsettings.json",
+              "RelativeToolTip": "appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAPAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-08-23T17:08:52.742Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "VadService.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Services\\VadService.cs",
+              "RelativeDocumentMoniker": "Services\\VadService.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Services\\VadService.cs",
+              "RelativeToolTip": "Services\\VadService.cs",
+              "ViewState": "AgIAAEgAAAAAAAAAAIA2wHAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:11:32.908Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Bookmark",
               "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
@@ -30,16 +229,59 @@
             {
               "$type": "Bookmark",
               "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "VoiceChatPipeline.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Pipeline\\VoiceChatPipeline.cs",
+              "RelativeDocumentMoniker": "Pipeline\\VoiceChatPipeline.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Pipeline\\VoiceChatPipeline.cs",
+              "RelativeToolTip": "Pipeline\\VoiceChatPipeline.cs",
+              "ViewState": "AgIAADAAAAAAAAAAAADgvz0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T17:01:48.584Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\local\\git\\voice_chat_demo\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "C:\\local\\git\\voice_chat_demo\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAqwBQAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-23T16:56:15.51Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "OptionsFactory.cs",
+              "DocumentMoniker": "C:\\Users\\syrovandrew\\AppData\\Local\\SourceServer\\ca99552f8860c479c04d232bd8645affe2dab8d80ba060031f60b8b898ad46e7\\src\\libraries\\Microsoft.Extensions.Options\\src\\OptionsFactory.cs",
+              "RelativeDocumentMoniker": "..\\..\\..\\Users\\syrovandrew\\AppData\\Local\\SourceServer\\ca99552f8860c479c04d232bd8645affe2dab8d80ba060031f60b8b898ad46e7\\src\\libraries\\Microsoft.Extensions.Options\\src\\OptionsFactory.cs",
+              "ToolTip": "C:\\Users\\syrovandrew\\AppData\\Local\\SourceServer\\ca99552f8860c479c04d232bd8645affe2dab8d80ba060031f60b8b898ad46e7\\src\\libraries\\Microsoft.Extensions.Options\\src\\OptionsFactory.cs",
+              "RelativeToolTip": "..\\..\\..\\Users\\syrovandrew\\AppData\\Local\\SourceServer\\ca99552f8860c479c04d232bd8645affe2dab8d80ba060031f60b8b898ad46e7\\src\\libraries\\Microsoft.Extensions.Options\\src\\OptionsFactory.cs",
+              "ViewState": "AgIAADMAAAAAAAAAAAAwwFQAAAAnAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-11T22:38:50.765Z",
+              "EditorCaption": ""
             }
           ]
         },
         {
-          "DockedWidth": 137,
+          "DockedWidth": 68,
           "SelectedChildIndex": -1,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{004be353-6879-467c-9d1e-9ac23cdf6d49}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{ca8cc5c7-0231-406a-95cd-aa5ed6ac0190}"
             },
             {
               "$type": "Bookmark",

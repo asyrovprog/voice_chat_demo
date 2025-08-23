@@ -1,0 +1,19 @@
+# Ignore Visual Studio working folder
+.vs/
+
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider / other IDEs (optional)
+.idea/
+*.iml
+
+# Logs
+*.log

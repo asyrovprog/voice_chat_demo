@@ -26,16 +26,12 @@ internal static class Program
         // AudioOptions no longer needs configuration binding - uses constants
 
         // Configure Semantic Kernel in DI container
-        builder.Services.AddSingleton(serviceProvider =>
-        {
-            var openAIOptions = serviceProvider.GetRequiredService<IOptions<OpenAIOptions>>().Value;
-            var kernelBuilder = Kernel.CreateBuilder();
-            kernelBuilder.AddOpenAIChatCompletion(openAIOptions.ChatModelId, openAIOptions.ApiKey);
-            return kernelBuilder.Build();
-        });
-
-        // Register the chat completion service directly from the kernel
-        builder.Services.AddSingleton(serviceProvider => serviceProvider.GetRequiredService<Kernel>().GetRequiredService<IChatCompletionService>());
+        builder.Services
+            .AddKernel()
+            .AddOpenAIChatCompletion(
+                modelId: builder.Configuration[$"{OpenAIOptions.SectionName}:ChatModelId"]!,
+                apiKey: builder.Configuration[$"{OpenAIOptions.SectionName}:ApiKey"]!
+            );
 
         // Register audio chat pipeline services
         builder.Services.AddSingleton<AudioPlaybackService>();
@@ -57,9 +53,7 @@ internal static class Program
             cts.Cancel();
         };
 
-        {
-            using var pipeline = host.Services.GetRequiredService<VoiceChatPipeline>();
-            await pipeline.StartAsync(cts.Token);
-        }
+        using var pipeline = host.Services.GetRequiredService<VoiceChatPipeline>();
+        await pipeline.RunAsync(cts.Token);
     }
 }
