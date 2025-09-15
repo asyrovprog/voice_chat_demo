@@ -1,12 +1,15 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
+
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 
 public static class Tools
 {
     // logs a warning message indicating that an operation (such as playback) was interrupted by user voice.
-    public static void LogInterrupted(this ILogger logger) => logger.LogWarning("Operation is cancelled by user interrupt.");
+    public static void LogInterrupted(this ILogger logger, [CallerMemberNameAttribute] string member = "") =>
+        logger.LogWarning($"{member} Operation is cancelled by user interrupt.");
 
     // Executes a pipeline operation with latency logging and error handling
     public static async Task<T> ExecutePipelineOperationAsync<T>(

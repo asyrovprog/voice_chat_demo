@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
@@ -10,7 +10,7 @@ public class VoiceChatPipeline : IDisposable
     private const int MaxDegreeOfParallelism = 1; // Number of parallel operations in dataflow blocks
     private const int BoundedCapacity = 5; // Maximum capacity for dataflow block buffers
     private const bool EnsureOrdered = true; // Ensure order preservation in pipeline
-    
+
     // Dataflow options fields - initialized inline
     private readonly ExecutionDataflowBlockOptions _executionOptions = new()
     {
@@ -19,12 +19,13 @@ public class VoiceChatPipeline : IDisposable
         EnsureOrdered = EnsureOrdered
     };
 
-    private readonly DataflowLinkOptions _linkOptions = new() {  PropagateCompletion = true };
+    private readonly DataflowLinkOptions _linkOptions = new() { PropagateCompletion = true };
     private readonly ILogger<VoiceChatPipeline> _logger;
     private readonly AudioPlaybackService _audioPlaybackService;
     private readonly SpeechToTextService _speechToTextService;
     private readonly TextToSpeechService _textToSpeechService;
     private readonly ChatService _chatService;
+    private readonly PipelineControlPlane _controlPlane;
     private readonly TurnManager _turnManager;
     private readonly VadService _vadService;
     private readonly AudioSourceService _audioSourceService;
@@ -39,49 +40,50 @@ public class VoiceChatPipeline : IDisposable
         ChatService chatService,
         VadService vadService,
         AudioSourceService audioSourceService,
-        TurnManager turnManager,
+        PipelineControlPlane controlPlane,
         IOptions<AudioOptions> audioOptions)
     {
-        _logger = logger;
-        _audioPlaybackService = audioPlaybackService;
-        _speechToTextService = speechToTextService;
-        _textToSpeechService = textToSpeechService;
-        _chatService = chatService;
-        _vadService = vadService;
-        _audioSourceService = audioSourceService;
-        _turnManager = turnManager;
+        this._logger = logger;
+        this._audioPlaybackService = audioPlaybackService;
+        this._speechToTextService = speechToTextService;
+        this._textToSpeechService = textToSpeechService;
+        this._chatService = chatService;
+        this._vadService = vadService;
+        this._audioSourceService = audioSourceService;
+        this._controlPlane = controlPlane;
+        this._turnManager = controlPlane.TurnManager;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        this._cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Create pipeline blocks - VAD now accepts raw audio chunks directly
-        var vadBlock = new TransformManyBlock<byte[], AudioEvent>(_vadService.Transform, _executionOptions);
-        var sttBlock = new TransformBlock<AudioEvent, TranscriptionEvent>(_speechToTextService.TransformAsync, _executionOptions);
-        var chatBlock = new TransformManyBlock<TranscriptionEvent, ChatEvent>(_chatService.TransformAsync, _executionOptions);
-        var ttsBlock = new TransformBlock<ChatEvent, SpeechEvent>(_textToSpeechService.TransformAsync, _executionOptions);
-        var playbackBlock = new ActionBlock<SpeechEvent>(_audioPlaybackService.PipelineActionAsync, _executionOptions);
+        var vadBlock = new TransformManyBlock<byte[], AudioEvent>(this._vadService.Transform, this._executionOptions);
+        var sttBlock = new TransformBlock<AudioEvent, TranscriptionEvent>(this._speechToTextService.TransformAsync, this._executionOptions);
+        var chatBlock = new TransformManyBlock<TranscriptionEvent, ChatEvent>(this._chatService.TransformAsync, this._executionOptions);
+        var ttsBlock = new TransformBlock<ChatEvent, SpeechEvent>(this._textToSpeechService.TransformAsync, this._executionOptions);
+        var playbackBlock = new ActionBlock<SpeechEvent>(this._audioPlaybackService.PipelineActionAsync, this._executionOptions);
 
         // Connect the blocks in the pipeline
-        Link(vadBlock, sttBlock, "VAD", audioData => audioData.Data.Length > 0);
-        Link(sttBlock, chatBlock, "STT", t => !string.IsNullOrEmpty(t));
-        Link(chatBlock, ttsBlock, "Chat", t => !string.IsNullOrEmpty(t));
-        Link(ttsBlock, playbackBlock, "TTS", t => t.Length > 0);
+        this.Link(vadBlock, sttBlock, "VAD", audioData => audioData.Data.Length > 0);
+        this.Link(sttBlock, chatBlock, "STT", t => !string.IsNullOrEmpty(t));
+        this.Link(chatBlock, ttsBlock, "Chat", t => !string.IsNullOrEmpty(t));
+        this.Link(ttsBlock, playbackBlock, "TTS", t => t.Length > 0);
 
-        _logger.LogInformation("Voice Chat started. You can start conversation now, or press Ctrl+C to exit.");
+        this._logger.LogInformation("Voice Chat started. You can start conversation now, or press Ctrl+C to exit.");
 
         try
         {
             // Keep feeding audio chunks into the VAD pipeline block till RunAsync is not cancelled
-            await foreach (var audioChunk in _audioSourceService.GetAudioChunksAsync(_cancellationTokenSource.Token))
+            await foreach (var audioChunk in this._audioSourceService.GetAudioChunksAsync(this._cancellationTokenSource.Token))
             {
-                await vadBlock.SendAsync(audioChunk, _cancellationTokenSource.Token);
+                await vadBlock.SendAsync(audioChunk, this._cancellationTokenSource.Token);
             }
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Voice Chat pipeline stopping due to cancellation...");
+            this._logger.LogInformation("Voice Chat pipeline stopping due to cancellation...");
         }
         finally
         {
@@ -92,36 +94,36 @@ public class VoiceChatPipeline : IDisposable
 
     public void Dispose()
     {
-        _vadService?.Dispose();
-        _cancellationTokenSource?.Dispose();
+        this._vadService?.Dispose();
+        this._cancellationTokenSource?.Dispose();
     }
 
     // Generic filter methods for pipeline events
     private bool Filter<T>(PipelineEvent<T> evt, string blockName, Func<T, bool> predicate, IDataflowBlock block)
     {
-        var valid = PipelineEvent<T>.IsValid(evt, _turnManager.CurrentTurnId, predicate);
+        var valid = PipelineEvent<T>.IsValid(evt, this._turnManager.CurrentTurnId, predicate);
         if (!valid)
         {
-            _logger.LogWarning($"{blockName} block: Event filtered out due to cancellation or empty payload.");
+            this._logger.LogWarning($"{blockName} block: Event filtered out due to cancellation or empty payload.");
         }
         return valid;
     }
 
     private bool FilterDiscarded<T>(PipelineEvent<T> evt, string blockName)
     {
-        _logger.LogWarning($"{blockName} block: Event filtered out due to cancellation or empty.");
+        this._logger.LogWarning($"{blockName} block: Event filtered out due to cancellation or empty.");
         return true;
     }
 
     private void Link<T>(
-        ISourceBlock<PipelineEvent<T>> source, 
-        ITargetBlock<PipelineEvent<T>> target, 
-        string blockName, 
+        ISourceBlock<PipelineEvent<T>> source,
+        ITargetBlock<PipelineEvent<T>> target,
+        string blockName,
         Func<T, bool> predicate)
     {
-        source.LinkTo(target, _linkOptions, evt => Filter(evt, blockName, predicate, source));
-        DiscardFiltered(source, blockName);
+        source.LinkTo(target, this._linkOptions, evt => this.Filter(evt, blockName, predicate, source));
+        this.DiscardFiltered(source, blockName);
     }
 
-    private void DiscardFiltered<T>(ISourceBlock<PipelineEvent<T>> block, string blockName) => block.LinkTo(DataflowBlock.NullTarget<PipelineEvent<T>>(), _linkOptions, evt => FilterDiscarded(evt, blockName));
+    private void DiscardFiltered<T>(ISourceBlock<PipelineEvent<T>> block, string blockName) => block.LinkTo(DataflowBlock.NullTarget<PipelineEvent<T>>(), this._linkOptions, evt => this.FilterDiscarded(evt, blockName));
 }

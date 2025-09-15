@@ -1,10 +1,10 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 global using AudioChunkEvent = PipelineEvent<byte[]>;
 global using AudioEvent = PipelineEvent<AudioData>;
-global using TranscriptionEvent = PipelineEvent<string?>;
 global using ChatEvent = PipelineEvent<string>;
 global using SpeechEvent = PipelineEvent<byte[]>;
+global using TranscriptionEvent = PipelineEvent<string?>;
 
 public readonly struct PipelineEvent<T>(int turnId, CancellationToken cancellationToken, T payload)
 {
@@ -19,7 +19,9 @@ public readonly struct PipelineEvent<T>(int turnId, CancellationToken cancellati
             && (payloadPredicate?.Invoke(evt.Payload) ?? true);
 }
 
-public record AudioData(byte[] Data, int SampleRate, int Channels, int BitsPerSample)
+public record AudioData(byte[] Data, int SampleRate, int Channels, int BitsPerSample, string? Transcript = null, int AudioEndMs = 0)
 {
-    public TimeSpan Duration => TimeSpan.FromSeconds((double)Data.Length / (SampleRate * Channels * BitsPerSample / 8));
+    public TimeSpan Duration => TimeSpan.FromSeconds((double)this.Data.Length / (this.SampleRate * this.Channels * this.BitsPerSample / 8));
+
+    public static int GetAudioDurationMs(int sizeInBytes, int sampleRate, int channels, int bitsPerSample) => (int) (1000.0 * sizeInBytes / (sampleRate * channels * bitsPerSample / 8));
 }

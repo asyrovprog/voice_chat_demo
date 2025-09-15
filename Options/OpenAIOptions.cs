@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.ComponentModel.DataAnnotations;
 
@@ -17,4 +17,9 @@ public class OpenAIOptions
 
     [Required]
     public string SpeechModelId { get; set; } = "gpt-4o-mini-tts";
+
+    [Required]
+    public string RealtimeApiModelId { get; set; } = "gpt-realtime";
 }
+
+

@@ -1,17 +1,17 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.Runtime.CompilerServices;
-using NAudio.Wave;
 using Microsoft.Extensions.Logging;
+using NAudio.Wave;
 
 public class AudioSourceService
 {
     private const int BitsPerByte = 8;
     private const int MillisecondsPerSecond = 1000;
-    
+
     private readonly ILogger<AudioSourceService> _logger;
-    private readonly int _frameBytes;
-    private readonly WaveFormat _waveFormat;
+    private int _frameBytes;
+    private WaveFormat _waveFormat;
 
     public AudioSourceService(ILogger<AudioSourceService> logger)
     {
@@ -19,8 +19,15 @@ public class AudioSourceService
 
         // Calculate frame size in bytes: (samples/sec * channels * bits/sample * milliseconds) / (bits/byte * ms/sec)
         _frameBytes = (AudioOptions.SampleRate * AudioOptions.Channels * AudioOptions.BitsPerSample * AudioOptions.BufferMilliseconds) / (BitsPerByte * MillisecondsPerSecond);
-
         _waveFormat = new WaveFormat(AudioOptions.SampleRate, AudioOptions.BitsPerSample, AudioOptions.Channels);
+    }
+
+    // Allow reconfiguration of audio format if needed
+    public void Configure(int sampleRate, int channels, int bitsPerSample)
+    {
+        _frameBytes = (sampleRate * channels * bitsPerSample * AudioOptions.BufferMilliseconds) / (BitsPerByte * MillisecondsPerSecond);
+        _waveFormat = new WaveFormat(sampleRate, bitsPerSample, channels);
+        _logger.LogInformation($"AudioSourceService reconfigured to {sampleRate} Hz, {channels} channels, {bitsPerSample} bits per sample.");
     }
 
     // Generate audio chunks from the microphone input.
@@ -32,7 +39,7 @@ public class AudioSourceService
 
         using var waveIn = new WaveInEvent
         {
-            WaveFormat = _waveFormat,
+            WaveFormat = this._waveFormat,
             BufferMilliseconds = AudioOptions.BufferMilliseconds
         };
 
@@ -40,17 +47,17 @@ public class AudioSourceService
 
         waveIn.DataAvailable += (_, e) =>
         {
-            if (e.Buffer.Length == _frameBytes)
+            if (e.Buffer.Length == this._frameBytes)
             {
                 chunks.Enqueue(e.Buffer);
                 semaphore.Release();
             }
             else
             {
-                _logger.LogWarning($"Ignoring received audio data of unexpected length: {e.Buffer.Length} bytes. Expected {_frameBytes}");
+                this._logger.LogWarning($"Ignoring received audio data of unexpected length: {e.Buffer.Length} bytes. Expected {this._frameBytes}");
             }
         };
-        
+
         waveIn.StartRecording();
         try
         {

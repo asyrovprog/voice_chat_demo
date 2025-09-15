@@ -1,10 +1,11 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using System.Runtime.CompilerServices;
 
 public class ChatService
 {
@@ -16,20 +17,20 @@ public class ChatService
 
     public ChatService(ILogger<ChatService> logger, IChatCompletionService chatCompletionService, IOptions<ChatOptions> chatOptions)
     {
-        _logger = logger;
-        _chatCompletionService = chatCompletionService;
-        _chatOptions = chatOptions.Value;
+        this._logger = logger;
+        this._chatCompletionService = chatCompletionService;
+        this._chatOptions = chatOptions.Value;
 
-        _options = new OpenAIPromptExecutionSettings
+        this._options = new OpenAIPromptExecutionSettings
         {
-            Temperature = _chatOptions.Temperature,
-            MaxTokens = _chatOptions.MaxTokens,
-            TopP = _chatOptions.TopP
+            Temperature = this._chatOptions.Temperature,
+            MaxTokens = this._chatOptions.MaxTokens,
+            TopP = this._chatOptions.TopP
         };
 
         // Initialize chat history with system message from configuration
-        _chatHistory = new ChatHistory();
-        _chatHistory.AddSystemMessage(_chatOptions.SystemMessage);
+        this._chatHistory = new ChatHistory();
+        this._chatHistory.AddSystemMessage(this._chatOptions.SystemMessage);
     }
 
     /// <summary>
@@ -37,7 +38,7 @@ public class ChatService
     /// </summary>
     public async IAsyncEnumerable<ChatEvent> TransformAsync(TranscriptionEvent evt)
     {
-        await foreach (var response in GetResponseStreamAsync(evt.Payload!, evt.CancellationToken).ConfigureAwait(false))
+        await foreach (var response in this.GetResponseStreamAsync(evt.Payload!, evt.CancellationToken).ConfigureAwait(false))
         {
             yield return new ChatEvent(evt.TurnId, evt.CancellationToken, response);
         }
@@ -53,15 +54,24 @@ public class ChatService
         }
 
         var buffer = "";
-        _logger.LogInformation($"USER: {input}");
-        _chatHistory.AddUserMessage(input);
+        this._logger.LogInformation($"USER: {input}");
+        this._chatHistory.AddUserMessage(input);
+        var stopWatch = Stopwatch.StartNew();
+        var isFirst = true;
 
-        await foreach (var result in _chatCompletionService.GetStreamingChatMessageContentsAsync(_chatHistory, _options, cancellationToken: token))
+        await foreach (var result in this._chatCompletionService.GetStreamingChatMessageContentsAsync(this._chatHistory, this._options, cancellationToken: token))
         {
             buffer += result?.Content ?? string.Empty;
-            if (buffer.Length >= _chatOptions.StreamingChunkSizeThreshold && (buffer[^1] == '.' || buffer[^1] == '?' || buffer[^1] == '!'))
+            if (isFirst)
             {
-                _logger.LogInformation($"LLM delta: {buffer}");
+                isFirst = false;
+                this._logger.LogInformation($"LLM first delta with latency: {stopWatch.Elapsed.TotalSeconds} sec: {result?.Content}");
+                stopWatch.Stop();
+            }
+
+            if (buffer.Length >= this._chatOptions.StreamingChunkSizeThreshold && (buffer[^1] == '.' || buffer[^1] == '?' || buffer[^1] == '!'))
+            {
+                this._logger.LogInformation($"LLM buffer queued: {buffer}");
                 yield return buffer;
                 buffer = string.Empty;
             }
@@ -69,7 +79,7 @@ public class ChatService
 
         if (!string.IsNullOrWhiteSpace(buffer))
         {
-            _logger.LogInformation($"LLM delta: {buffer}");
+            this._logger.LogInformation($"LLM delta: {buffer}");
             yield return buffer;
         }
     }

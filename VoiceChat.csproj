@@ -7,38 +7,35 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>x64</PlatformTarget>
     <UserSecretsId>voiceagent-console-dev</UserSecretsId>
-    
-    <!-- Microsoft demo project metadata -->
-    <Product>Semantic Kernel Voice Chat Demo</Product>
-    <Description>A voice chat application demonstrating Semantic Kernel integration with OpenAI APIs for speech-to-text, chat completion, and text-to-speech.</Description>
-    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
-    <Version>1.0.0</Version>
+    <NoWarn>$(NoWarn);VSTHRD111,CA2007,CA2254,CS8618,CS1591,CA1050,CA1063,CA1052,CA1810,CS8765,CS0718,CA1065,CA1816,CA1068,CA1815,CS0718,CA1000,RCS1036,RCS1102,SKEXP0001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Microsoft Extensions for dependency injection and configuration -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="8.0.0" />
-    
-    <!-- Semantic Kernel packages -->
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.3.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.3.0" />
-    
-    <!-- OpenAI direct API client for audio services -->
-    <PackageReference Include="OpenAI" Version="2.3.0" />
-    
-    <!-- Audio processing dependencies -->
-    <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="WebRtcVadSharp" Version="1.3.2" />
-    
-    <!-- Pipeline processing -->
-    <PackageReference Include="System.Threading.Tasks.Dataflow" Version="8.0.0" />
+  <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.9" />
+  <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.9" />
+
+  <!-- Semantic Kernel packages -->
+  <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
+  <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.65.0" />
+
+  <!-- OpenAI .NET SDK for TTS/STT -->
+  <PackageReference Include="OpenAI" Version="2.4.0" />
+
+  <!-- Audio and Dataflow utilities -->
+  <PackageReference Include="NAudio" Version="2.2.1" />
+  <PackageReference Include="System.Threading.Tasks.Dataflow" Version="9.0.9" />
+
+  <!-- WebRTC VAD wrapper -->
+  <PackageReference Include="WebRtcVadSharp" Version="1.3.2" />
+
+  <!-- Ensure compatible System.ClientModel for SK OpenAI connector (implicit ApiKeyCredential operator) -->
+  <PackageReference Include="System.ClientModel" Version="1.6.1" />
   </ItemGroup>
 
   <ItemGroup>

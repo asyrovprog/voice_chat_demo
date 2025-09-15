@@ -1,71 +1,100 @@
-### .NET build artifacts
+# Core build artifacts
 bin/
 obj/
 [Bb]uild/
 [Ll]og/
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-*.exe
-*.dll
-*.pdb
-*.mdb
-*.cache
-*.log
-*.userprefs
-*.nuget/
-*.nupkg
 
-# Visual Studio generated
+# Visual Studio
+.vs/
+# VS working files
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
 
-# Visual Studio Code
-.vscode/
-.history/
-*.code-workspace
-
-# JetBrains Rider / IntelliJ
+# Rider / JetBrains
 .idea/
-*.iml
+*.sln.iml
 
-# OS generated files
+# Generated files
+Generated/**
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+# Lock files (keep if you rely on reproducible builds)
+project.lock.json
+project.fragment.lock.json
+
+# Coverage / test results
+*.trx
+TestResult*/
+coverage*/
+.coverage
+*.coverage
+*.coveragexml
+.opencover.xml
+
+# Publish outputs
+publish/
+artifacts/
+dist/
+
+# Logs & diagnostics
+*.log
+*.svclog
+*.etl
+DumpStack.log
+*.dmp
+
+# Secrets / local config
+appsettings.*.local.json
+secrets.json
+*.pfx
+*.snk
+
+# User specific
+*.rsuser
+*.userprefs
+
+# Resharper / Code analysis
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Cache
+*.cache
+*.temp
+tmp/
+temp/
+
+# Azure
+PublishProfiles/
+
+# Entity Framework
+*Migrations/obj/
+
+# SQLite / Local DB
+*.db
+*.db-shm
+*.db-wal
+*.mdf
+*.ldf
+
+# Misc
+*.bak
+*.orig
+*.rej
+
+# Package managers
+node_modules/
+pnpm-lock.yaml
+
+# VS Code
+.vscode/
+
+# OS
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Test results
-[Tt]est[Rr]esult*/
-*.coverage
-*.coveragexml
-*.opencover.xml
-
-# Package restore
-project.lock.json
-*.lock.json
-packages/
-.nuget/
-
-# Tooling caches
-*.vs/
-.vs/
-*.vscode/
-_ReSharper*/
-*.[Rr]e[Ss]harper
-*.dotCover
-
-# Logs
-*.log
-
-# Others
-*.dbmdl
-*.bak
-*.swp
-*.swn
-*.swm
-*.swo
