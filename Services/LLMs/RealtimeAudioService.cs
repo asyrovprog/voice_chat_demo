@@ -13,7 +13,7 @@ public class RealtimeAudioService : IDisposable
 {
     private readonly ILogger<RealtimeAudioService> _logger;
     private readonly RealtimeClient _realtimeClient;
-    private readonly OpenAIOptions _audioOptions;
+    private readonly RealtimeModelsOptions.Template _options;
     private RealtimeSession? _realtimeSession;
 
     private ActionBlock<AudioEvent>? _sendAudioBlock;
@@ -22,46 +22,60 @@ public class RealtimeAudioService : IDisposable
     private CancellationTokenSource? _cancellationTokenSource;
 
     private TurnManager _turnManager;
+    private string _name = "";
 
     public RealtimeAudioService(
         PipelineControlPlane controlPlane,
-        ILogger<RealtimeAudioService> logger, 
-        IOptions<OpenAIOptions> openAIOptions
+        ILogger<RealtimeAudioService> logger,
+        IOptions<OpenAIOptions> openAIOptions,
+        IOptions<RealtimeModelsOptions.Template> options
     )
     {
         _turnManager = controlPlane.TurnManager;
         this._logger = logger;
-        _audioOptions = openAIOptions.Value;
+        _options = options.Value;
 
-        var apiKeyCredential = new ApiKeyCredential(_audioOptions.ApiKey);
+        var apiKeyCredential = new ApiKeyCredential(openAIOptions.Value.ApiKey);
         _realtimeClient = new RealtimeClient(apiKeyCredential);
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public int ParticipantId { get; set; } = 0;
+
+    public async Task StartAsync(PipelineControlPlane? controlPlane, string name = "", CancellationToken cancellationToken = default)
     {
+        if (controlPlane != null)
+        {
+            _turnManager = controlPlane.TurnManager;
+        }
+
         if (_realtimeSession != null)
         {
             _logger.LogError("RealtimeAudioService is already started. Ignoring duplicate StartAsync() call.");
             return;
         }
 
+        _name = name;
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _realtimeSession = await this._realtimeClient.StartConversationSessionAsync(_audioOptions.RealtimeApiModelId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        _realtimeSession = await this._realtimeClient.StartConversationSessionAsync(_options.ModelId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var config = new ConversationSessionOptions()
         {
-            Instructions = 
-            "You are a voice assistant. Keep your responses concise, conversational yet short, up to 4-5 sentences.",
+            Instructions = _options.Instructions,
             InputAudioFormat = RealtimeAudioFormat.Pcm16,
             OutputAudioFormat = RealtimeAudioFormat.Pcm16,
             InputTranscriptionOptions = new InputTranscriptionOptions
             {
                 Model = "whisper-1",
-                Prompt = "The user is speaking to a voice assistant.",
+                Prompt = _options.TranscriptInstructions,
+                Language = _options.Language,
             },
-            TurnDetectionOptions = TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(),
+            TurnDetectionOptions = TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(
+                eagernessLevel: SemanticEagernessLevel.High,
+                enableAutomaticResponseCreation: true,
+                enableResponseInterruption: true),
             ContentModalities = RealtimeContentModalities.Text | RealtimeContentModalities.Audio,
-            Temperature = 0.8f,
+            Temperature = (float)_options.Temperature,
+            Voice = _options.Voice,
         };
 
         await _realtimeSession.ConfigureConversationSessionAsync(config, cancellationToken).ConfigureAwait(false);
@@ -102,6 +116,17 @@ public class RealtimeAudioService : IDisposable
 
     public ISourceBlock<TranscriptionEvent> TranscriptOutput => _transcriptBus ?? throw new InvalidOperationException();
 
+    public async Task TriggerResponseAsync(string prompt, CancellationToken cancellationToken = default)
+    {
+        if (_realtimeSession == null)
+        {
+            _logger.LogError("Attempted to trigger response before the RealtimeAudioService was started. Please call StartAsync() before triggering a response.");
+            return;
+        }
+        await _realtimeSession.AddItemAsync(RealtimeItem.CreateAssistantMessage([ConversationContentPart.CreateOutputTextPart(prompt)])).ConfigureAwait(false);
+        await _realtimeSession.StartResponseAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task SendInputAudioAsync(AudioEvent audioEvent, CancellationToken cancellationToken = default)
     {
         if (_sendAudioBlock == null || _realtimeSession == null)
@@ -130,26 +155,31 @@ public class RealtimeAudioService : IDisposable
                 switch (update)
                 {
                     case InputAudioTranscriptionDeltaUpdate transcriptDelta:
-                        _logger.LogInformation($"Transcript Delta: {transcriptDelta.Delta}");
+                        _logger.LogInformation($"{_name} - Transcript Delta: {transcriptDelta.Delta}");
                         break;
 
                     case InputAudioTranscriptionFinishedUpdate transcriptFinished:
-                        _logger.LogInformation($"Transcript Finished: {transcriptFinished.Transcript}");
+                        _logger.LogInformation($"{_name} - Transcript Finished: {transcriptFinished.Transcript}");
                         break;
 
                     case OutputStreamingStartedUpdate streamingStartedUpdate:
+                        _logger.LogInformation($"[{_name}] - Output streaming started.");
+                        _turnManager.Interrupt();
                         responseTranscript.Clear();
                         audioEndMs = 0;
-                        _logger.LogInformation("Output streaming started.");
-                        _turnManager.Interrupt();
                         break;
 
                     case OutputDeltaUpdate delta:
                         var common = $"EventId: {delta.EventId}, ResponseId: {delta.ResponseId}, ItemId: {delta.ItemId}, ItemIndex: {delta.ItemIndex}, Part: {delta.ContentPartIndex}";
 
+                        if (delta.Text != null)
+                        {
+                            _logger.LogDebug($"[{_name}] - {nameof(RealtimeAudioService)} Text Delta: {delta.Text}, {common}");
+                        }
+
                         if (!string.IsNullOrEmpty(delta.AudioTranscript))
                         {
-                            _logger.LogDebug($"{nameof(RealtimeAudioService)} Transcript Delta: {delta.AudioTranscript}, {common}");
+                            _logger.LogDebug($"[{_name}] - {nameof(RealtimeAudioService)} Transcript Delta: {delta.AudioTranscript}, {common}");
                             responseTranscript.Append(delta.AudioTranscript);
 
                             await _transcriptBus.SendAsync(new TranscriptionEvent(
@@ -160,30 +190,35 @@ public class RealtimeAudioService : IDisposable
 
                         if (delta.AudioBytes != null)
                         {
-                            _logger.LogDebug($"{nameof(RealtimeAudioService)} Audio Delta Length: {delta.AudioBytes.Length}, {common}");
+                            _logger.LogDebug($"[{_name}] - {nameof(RealtimeAudioService)} Audio Length: {delta.AudioBytes.Length}, Audio Max: {delta.AudioBytes.ToArray().Max()}, {common}");
 
                             var transcript = responseTranscript.ToString();
                             responseTranscript.Clear();
 
                             var audioEndTime = audioEndMs + AudioData.GetAudioDurationMs(delta.AudioBytes.Length, 24000, 1, 16);
 
-                            await _audioBus.SendAsync(new AudioEvent(
+                            _ = _audioBus.Post(new AudioEvent(
                                 _turnManager.CurrentTurnId,
                                 _turnManager.CurrentToken,
-                                new AudioData(delta.AudioBytes.ToArray(), 24000, 1, 16, transcript, audioEndTime)), cancellationToken).ConfigureAwait(false);
+                                new AudioData(delta.AudioBytes.ToArray(), 24000, 1, 16, transcript, audioEndTime, ParticipantId)));
                         }
                         break;
 
                     case OutputAudioTranscriptionFinishedUpdate finishedUpdate:
-                        _logger.LogInformation($"Output audio transcript finished: {finishedUpdate.Transcript}");
+                        _logger.LogInformation($"[{_name}] - Output audio transcript finished: {finishedUpdate.Transcript}");
                         break;
 
                     case OutputStreamingFinishedUpdate finishedUpdate:
-                        _logger.LogInformation("Output streaming finished.");
+                        var data = new AudioData(new byte[24000], 24000, 1, 16, "", audioEndMs, ParticipantId);
+                        for (int i = 0; i < 10; i++)
+                        {
+                            _ = _audioBus.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
+                        }
+                        _logger.LogInformation($"[{_name}] - Output streaming finished.");
                         break;
 
                     case RealtimeErrorUpdate err:
-                        _logger.LogWarning("[Realtime] {Message}", err.Message);
+                        _logger.LogWarning($"[{_name}] - [Realtime] {err.Message}");
                         break;
                 }
             }

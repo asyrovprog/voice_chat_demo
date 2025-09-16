@@ -1,11 +1,12 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 
 public sealed class AudioSchedulerService : IAsyncDisposable
 {
-    private const int MarginMilliseconds = 5;
+    private const int MarginMilliseconds = 15;
     private readonly TurnManager _turnManager;
     private readonly ILogger _logger;
 
@@ -14,33 +15,23 @@ public sealed class AudioSchedulerService : IAsyncDisposable
     private readonly SemaphoreSlim _signal = new(0);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _cts = new();
+    private readonly Stopwatch _clock;
+    private readonly ConcurrentQueue<AudioEvent> _pendingAudio = new();
+
     private CancellationTokenSource _waitCts = new();
-
     private Task? _streamingTask;
-    private Stopwatch? _clock;
-
-    // State guarded by _lock
-    private readonly Queue<AudioEvent> _pendingAudio = new();
     private int _currentTurn = -1;
     private TimeSpan _nextStart = TimeSpan.Zero;
-    private bool _completing;
 
     public AudioSchedulerService(ILogger<AudioSchedulerService> logger, PipelineControlPlane controlPlane)
     {
         _logger = logger;
         _turnManager = controlPlane.TurnManager;
+        _clock = Stopwatch.StartNew();
 
         _input = new ActionBlock<AudioEvent>(evt =>
         {
-            lock (_gate)
-            {
-                if (evt.TurnId > _currentTurn)
-                {
-                    _pendingAudio.Clear();
-                    _currentTurn = evt.TurnId;
-                    _nextStart = _clock?.Elapsed ?? TimeSpan.Zero;
-                }
-            }
+            Interrupt(evt.TurnId);
             _pendingAudio.Enqueue(evt);
             _signal.Release();
         },
@@ -53,8 +44,8 @@ public sealed class AudioSchedulerService : IAsyncDisposable
 
         _output = new BroadcastBlock<AudioEvent>(e => e);
 
-        _turnManager.OnTurnInterrupted += _ => Interrupt();
-        _streamingTask = Task.Run(() => RunAsync(_cts.Token));
+        _turnManager.OnTurnInterrupted += newTurnId => Interrupt(newTurnId);
+        _streamingTask = Task.Run(() => RunAsync(_cts.Token), _cts.Token);
     }
 
     public ITargetBlock<AudioEvent> AudioInput => _input;
@@ -63,84 +54,55 @@ public sealed class AudioSchedulerService : IAsyncDisposable
 
     public void Complete()
     {
-        _completing = true;
         _input.Complete();
         _signal.Release();
     }
 
     private async Task RunAsync(CancellationToken token)
     {
-        _clock = Stopwatch.StartNew();
         try
         {
             while (!token.IsCancellationRequested)
             {
-                AudioEvent? next = null;
-
-                lock (_gate)
+                if (!_signal.Wait(0, token))
                 {
-                    if (_pendingAudio.Count > 0)
-                    {
-                        next = _pendingAudio.Peek();
-                    }
-                }
-
-                if (next is null)
-                {
-                    if (_completing && _input.Completion.IsCompleted) break;
-                    try { await _signal.WaitAsync(token).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { break; }
-                    continue;
+                    await _signal.WaitAsync(token).ConfigureAwait(false);
                 }
 
                 // pacing
-                var now = _clock.Elapsed;
-                TimeSpan wait;
-                TimeSpan updatedNextStart;
+                TimeSpan startAt;
+                CancellationToken abortToken;
                 lock (_gate)
                 {
-                    wait = _nextStart - now - TimeSpan.FromMilliseconds(MarginMilliseconds);
-                    updatedNextStart = _nextStart;
+                    startAt = _nextStart;
+                    abortToken = _waitCts.Token;
                 }
+                var now = _clock.Elapsed;
+                TimeSpan wait = startAt - now;
 
-                if (wait > TimeSpan.FromMicroseconds(MarginMilliseconds))
+                if (wait > TimeSpan.FromMilliseconds(MarginMilliseconds))
                 {
-                    CancellationToken delayToken;
-                    lock (_gate)
-                    {
-                        delayToken = CancellationTokenSource.CreateLinkedTokenSource(token, _waitCts.Token).Token;
-                    }
+                    var delayToken = CancellationTokenSource.CreateLinkedTokenSource(token, abortToken).Token;
                     try
                     {
                         await Task.Delay(wait, delayToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
-                        // Interrupted or shutting down; loop to re-evaluate
                         continue;
                     }
                 }
 
-                // Emit
-                lock (_gate)
+                token.ThrowIfCancellationRequested();
+                if (_pendingAudio.TryDequeue(out var audio))
                 {
-                    // Stale check after potential wait
-                    if (_pendingAudio.Count == 0) continue;
-                    var head = _pendingAudio.Peek();
-                    if (head.TurnId != _currentTurn)
-                    {
-                        _pendingAudio.Dequeue(); // stale
-                        continue;
-                    }
-
-                    _pendingAudio.Dequeue();
-                    if (!_output.Post(head))
+                    if (!_output.Post(audio))
                     {
                         _logger.LogWarning("AudioSchedulerService: Failed to post to output audio chunk.");
                     }
 
                     // NOTE: we must start the next slightly before the end of the current to avoid gaps
-                    _nextStart = updatedNextStart + head.Payload.Duration - TimeSpan.FromMilliseconds(MarginMilliseconds);
+                    _nextStart = startAt + audio.Payload.Duration - TimeSpan.FromMilliseconds(MarginMilliseconds);
                 }
             }
         }
@@ -154,18 +116,22 @@ public sealed class AudioSchedulerService : IAsyncDisposable
         }
     }
 
-    private void Interrupt()
+    private void Interrupt(int? currentTurn = null)
     {
+        CancellationTokenSource cts;
+
         lock (_gate)
         {
-            if (_pendingAudio.Count > 0) _pendingAudio.Clear();
-            _nextStart = _clock?.Elapsed ?? TimeSpan.Zero;
+            if (currentTurn is not null && currentTurn == _currentTurn) return;
 
-            _waitCts.Cancel();
-            _waitCts.Dispose();
+            _currentTurn = currentTurn ?? _currentTurn;
+            ClearPendingAudio();
+            _nextStart = _clock.Elapsed;
+            cts = _waitCts;
             _waitCts = new CancellationTokenSource();
         }
-        _signal.Release(); // wake loop
+
+        try { cts.Cancel(); } catch { }
         _logger.LogInformation("AudioSchedulerService: Interrupted -> cleared pending queue.");
     }
 
@@ -184,5 +150,11 @@ public sealed class AudioSchedulerService : IAsyncDisposable
         _waitCts.Dispose();
         _cts.Dispose();
         _signal.Dispose();
+    }
+
+    private void ClearPendingAudio()
+    {
+        while (_signal.Wait(0)) { }
+        while (_pendingAudio.TryDequeue(out _)) { }
     }
 }

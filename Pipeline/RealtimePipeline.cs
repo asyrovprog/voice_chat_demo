@@ -3,7 +3,7 @@
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 
-public class RealtimePipeline : IDisposable
+public class RealtimePipeline : IAsyncDisposable
 {
     // Configuration constants aligned with VoiceChatPipeline style
     private const int MaxDegreeOfParallelism = 1;
@@ -22,25 +22,26 @@ public class RealtimePipeline : IDisposable
     private readonly AudioSourceService _audioSourceService;
     private readonly RealtimeAudioService _realtimeAudioService;
     private readonly AudioStreamPlaybackService _audioStreamPlaybackService;
-    private readonly AudioSchedulerService _audioSchedulerService;
-    private readonly TurnManager _turnManager; // reserved for future turn-based interruption
-    private readonly PipelineControlPlane _controlPlane;
+    private readonly AudioPacerService _audioPacerService;
+    private TurnManager _turnManager;
+    private PipelineControlPlane _controlPlane;
 
     private CancellationTokenSource? _cts;
 
     public RealtimePipeline(
         ILogger<RealtimePipeline> logger,
         AudioSourceService audioSourceService,
-        RealtimeAudioService realtimeAudioService,
+        Func<AudioPacerService> createAudioPacer,
+        Func<string, RealtimeAudioService> realtimeFactory,
         AudioStreamPlaybackService audioStreamPlaybackService,
         AudioSchedulerService audioSchedulerService,
         PipelineControlPlane controlPlane)
     {
         _logger = logger;
         _audioSourceService = audioSourceService;
-        _realtimeAudioService = realtimeAudioService;
+        _realtimeAudioService = realtimeFactory.Invoke("Joy");
         _audioStreamPlaybackService = audioStreamPlaybackService;
-        _audioSchedulerService = audioSchedulerService;
+        _audioPacerService = createAudioPacer.Invoke();
         _controlPlane = controlPlane;
         _turnManager = controlPlane.TurnManager;
     }
@@ -50,7 +51,7 @@ public class RealtimePipeline : IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Ensure realtime service started
-        await _realtimeAudioService.StartAsync(_cts.Token).ConfigureAwait(false);
+        await _realtimeAudioService.StartAsync(null, "", _cts.Token).ConfigureAwait(false);
 
         // Reconfigure to be compatible with Realtime API, which is 24000 Hz, mono, 16-bit PCM audio
         _audioSourceService.Configure(24000, 1, 16);
@@ -58,19 +59,19 @@ public class RealtimePipeline : IDisposable
         var audioEventBlock = new TransformBlock<byte[], AudioEvent>(chunk => new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, new AudioData(chunk, 24000, 1, 16)), _executionOptions);
         var realtimeIn = _realtimeAudioService.AudioInput;
         var realtimeOut = _realtimeAudioService.AudioOutput;
-        var audioSchedulerIn = _audioSchedulerService.AudioInput;
-        var audioSchedulerOut = _audioSchedulerService.AudioOutput;
-        var playback = new ActionBlock<AudioEvent>(_audioStreamPlaybackService.PipelineActionAsync, _executionOptions);
+        var pacerIn = _audioPacerService.In;
+        var pacerOut = _audioPacerService.Out;
+        var playback = new ActionBlock<AudioEvent>(_audioStreamPlaybackService.PipelineAction, _executionOptions);
 
         // Link internal blocks
         audioEventBlock.LinkTo(realtimeIn, _linkOptions);
         audioEventBlock.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions); // discard filtered (none currently)
 
-        realtimeOut.LinkTo(audioSchedulerIn, _linkOptions);
+        realtimeOut.LinkTo(pacerIn, _linkOptions);
         realtimeOut.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
 
-        audioSchedulerOut.LinkTo(playback, _linkOptions);
-        audioSchedulerOut.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
+        pacerOut.LinkTo(playback, _linkOptions);
+        pacerOut.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
 
         _logger.LogInformation("Realtime pipeline started (Mic -> Realtime -> Playback). Press Ctrl+C to stop.");
 
@@ -93,8 +94,10 @@ public class RealtimePipeline : IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        await _audioPacerService.DisposeAsync();
+        _realtimeAudioService.Dispose();
         _cts?.Cancel();
         _cts?.Dispose();
         _audioStreamPlaybackService?.Dispose();

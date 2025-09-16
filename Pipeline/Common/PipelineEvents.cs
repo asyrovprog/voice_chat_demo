@@ -19,9 +19,34 @@ public readonly struct PipelineEvent<T>(int turnId, CancellationToken cancellati
             && (payloadPredicate?.Invoke(evt.Payload) ?? true);
 }
 
-public record AudioData(byte[] Data, int SampleRate, int Channels, int BitsPerSample, string? Transcript = null, int AudioEndMs = 0)
+public record AudioData(byte[] Data, int SampleRate, int Channels, int BitsPerSample, string? Transcript = null, double AudioEndMs = 0, int Participant = 0)
 {
-    public TimeSpan Duration => TimeSpan.FromSeconds((double)this.Data.Length / (this.SampleRate * this.Channels * this.BitsPerSample / 8));
+    public int BytesPerFrame => checked(Channels * (BitsPerSample / 8));
+    public int Samples => Data.Length / BytesPerFrame;
 
-    public static int GetAudioDurationMs(int sizeInBytes, int sampleRate, int channels, int bitsPerSample) => (int) (1000.0 * sizeInBytes / (sampleRate * channels * bitsPerSample / 8));
+    public TimeSpan Duration => TimeSpan.FromSeconds((double)Samples / SampleRate);
+
+    public static double GetAudioDurationMs(int sizeInBytes, int sampleRate, int channels, int bitsPerSample)
+    {
+        var bytesPerFrame = checked(channels * (bitsPerSample / 8));
+        var samples = sizeInBytes / bytesPerFrame;
+        return (double) samples / sampleRate;
+    }
+
+    public static AudioData Concat(AudioData first, AudioData second)
+    {
+        var combinedData = new byte[first.Data.Length + second.Data.Length];
+        Buffer.BlockCopy(first.Data, 0, combinedData, 0, first.Data.Length);
+        Buffer.BlockCopy(second.Data, 0, combinedData, first.Data.Length, second.Data.Length);
+        var endMs = first.AudioEndMs + GetAudioDurationMs(second.Data.Length, first.SampleRate, first.Channels, first.BitsPerSample);
+
+        return new AudioData(
+            combinedData,
+            first.SampleRate,
+            first.Channels,
+            first.BitsPerSample,
+            first.Transcript ?? string.Empty + second.Transcript ?? string.Empty,
+            endMs,
+            second.Participant);
+    }
 }
