@@ -5,6 +5,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 
+using System.Security.Cryptography.X509Certificates;
+
 internal static class Program
 {
     internal static async Task Main(string[] args)
@@ -23,6 +25,9 @@ internal static class Program
                 modelId: builder.Configuration[$"{OpenAIOptions.SectionName}:ChatModelId"]!,
                 apiKey: builder.Configuration[$"{OpenAIOptions.SectionName}:ApiKey"]!
             );
+        builder.Services.AddTransient<Func<Kernel>>(sp => () => sp.GetRequiredService<Kernel>());
+        builder.Services.AddTransient<ConversationalPlugin>();
+        builder.Services.AddTransient<Func<ConversationalPlugin>>(sp => () => sp.GetRequiredService<ConversationalPlugin>());
 
         // Register shared services
         builder.Services.AddSingleton<PipelineControlPlane>();
@@ -48,8 +53,6 @@ internal static class Program
         builder.Services.AddSingleton<Func<AudioPlaybackService>>(sp => () => sp.GetRequiredService<AudioPlaybackService>());
         builder.Services.AddTransient<AudioMixerService>();
         builder.Services.AddTransient<Func<AudioMixerService>>(sp => () => sp.GetRequiredService<AudioMixerService>());
-        builder.Services.AddTransient<AudioSchedulerService>();
-        builder.Services.AddSingleton<Func<AudioSchedulerService>>(sp => () => sp.GetRequiredService<AudioSchedulerService>());
         builder.Services.AddTransient<AudioStreamPlaybackService>();
         builder.Services.AddTransient<Func<AudioStreamPlaybackService>>(sp => () => sp.GetRequiredService<AudioStreamPlaybackService>());
         builder.Services.AddTransient<AudioPacerService>();
@@ -59,6 +62,7 @@ internal static class Program
         builder.Services.AddTransient<RealtimePipeline>();
         builder.Services.AddTransient<VoiceChatPipeline>();
         builder.Services.AddTransient<AgentToAgentRealtimePipeline>();
+        builder.Services.AddTransient<HumanWithAgentsRealtimePipeline>();
 
         using var host = builder.Build();
 
@@ -71,36 +75,91 @@ internal static class Program
         };
 
         Console.WriteLine("Select pipeline:\n" +
-            "[1] Classic (VAD->STT->Chat->TTS)\n" +
-            "[2] Realtime (Mic->Realtime->Playback)\n" +
-            "[3] Agent-to-Agent Realtime (Mic->Realtime->Playback)\n");
+            "[1] Classic STT->Chat->TTS\n" +
+            "[2] Realtime: Automatic Response enabled.\n" +
+            "[3] Realtime: Probabilistic Response based on context.\n" +
+            "[4] Realtime: 2 Agents talk to each other with Automatic Response.\n" +
+            "[5] Realtime: Human and 2 Agents. Probabilistic Response based on context.\n");
         Console.Write("\nEnter Pipeline id: ");
 
         var choice = Console.ReadLine();
+        var color = Console.ForegroundColor;
+        Console.ForegroundColor = ConsoleColor.Yellow;
         _ = int.TryParse(choice, out int mode);
+        Task? t = null;
         switch (mode)
         {
             case 1:
-                Console.WriteLine("\nStarting Classic Voice Chat Pipeline (VAD->STT->Chat->TTS). Press Ctrl+C to stop.");
+                Console.WriteLine(
+                    "\nClassic Voice Chat Pipeline (VAD->STT->Chat->TTS):" +
+                    "\n- Slow, yet simple and inexpective." +
+                    "\n- You can interrupt agent by voice." +
+                    "\n\nHave fun!\n\n");
+
                 var p1 = host.Services.GetRequiredService<VoiceChatPipeline>();
-                await p1.RunAsync(cts.Token);
+                t = p1.RunAsync(cts.Token);
                 break;
 
             case 2:
-                Console.WriteLine("\nStarting Realtime Pipeline (Mic->Realtime->Playback). Press Ctrl+C to stop.");
+                Console.WriteLine(
+                    "\nAgent (fictionary coding agent Beta) and human." +
+                    "\n- Automatic turn detection based on speech activity." +
+                    "\n- No intelligent response. Such as still respond to 'Please keep quiet.'" + 
+                    "\n- You can interrupt agent by voice." +
+                    "\n\nHave fun!\n\n");
+
                 var p2 = host.Services.GetRequiredService<RealtimePipeline>();
-                await p2.RunAsync(cts.Token);
+                t = p2.RunAsync(cts.Token);
                 break;
 
             case 3:
-                Console.WriteLine("\nStarting Agent-to-Agent Realtime Pipeline (Mic->Realtime->Playback). Press Ctrl+C to stop.");
+                Console.WriteLine(
+                    "\nAgent (fictionary coding agent Beta) and human." +
+                    "\n- Automatic turn detection based on speech activity." +
+                    "\n- More intelligent engagement based on estimation of probability to respond." +
+                    "\nYou can interrupt agent by voice." +
+                    "\n\nHave fun!\n\n");
+
+                var p2_1 = host.Services.GetRequiredService<RealtimePipeline>();
+                p2_1.AutoResponse = false;
+                t = p2_1.RunAsync(cts.Token);
+                break;
+
+            case 4:
+                Console.WriteLine(
+                    "\n2 Agents (fictionary coding agents Beta and Sam) Realtime Pipeline." +
+                    "\nAutomatic turn detection based on voice activity." +
+                    "\nAgents CANNOT hear you they just talk to each other." +
+                    "\n\nHave fun!\n\n");
+
                 var p3 = host.Services.GetRequiredService<AgentToAgentRealtimePipeline>();
-                await p3.RunAsync(cts.Token);
+                t = p3.RunAsync(cts.Token);
+                break;
+
+            case 5:
+                Console.WriteLine(
+                    "\n2 Agents (fictionary coding agents Beta and Sam) and Human Pipeline." +
+                    "\n- Automatic turn detection based on voice activity." +
+                    "\n- More intelligent engagement based on estimation of probability to respond." +
+                    "\n- Agents can hear you." +
+                    "\n- You can interrupt agent by voice." +
+                    "\n\nHave fun!\n\n");
+
+                var p4 = host.Services.GetRequiredService<HumanWithAgentsRealtimePipeline>();
+                p4.AutoResponse = false;
+                await p4.RunAsync(cts.Token);
                 break;
 
             default:
                 Console.WriteLine("\nInvalid choice. Exiting.");
                 return;
+        }
+
+        if (t != null)
+        {
+            Console.ForegroundColor = color;
+            await t;
+            Console.WriteLine("\nExiting. Bye!");
         }
     }
 

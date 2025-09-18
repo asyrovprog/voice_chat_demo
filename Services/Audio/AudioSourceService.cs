@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks.Dataflow;
+
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 

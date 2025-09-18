@@ -1,12 +1,13 @@
 // Copyright (c) Microsoft. All rights reserved.
 
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 
 using NAudio.Mixer;
 
 using System.Threading.Tasks.Dataflow;
 
-public class AgentToAgentRealtimePipeline : IAsyncDisposable
+public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
 {
     // Configuration constants aligned with VoiceChatPipeline style
     private const int MaxDegreeOfParallelism = 1;
@@ -32,18 +33,31 @@ public class AgentToAgentRealtimePipeline : IAsyncDisposable
     private readonly PipelineControlPlane _joyControlPlane = new();
     private readonly PipelineControlPlane _samControlPlane = new();
     private readonly AudioStreamPlaybackService _playback;
+    private readonly AudioSourceService _audioSource;
+    private readonly Kernel _joyKernel;
+    private readonly Kernel _samKernel;
+    private readonly ConversationalPlugin _joyPlugin;
+    private readonly ConversationalPlugin _samPlugin;
+
 
     private CancellationTokenSource? _cts;
     private Func<AudioMixerService> _createMixer;
 
-    public AgentToAgentRealtimePipeline(
+    public HumanWithAgentsRealtimePipeline(
         ILogger<RealtimePipeline> logger,
         Func<AudioPacerService> createPacer,
         Func<string, RealtimeAudioService> createRealtime,
         Func<AudioMixerService> createMixer,
+        AudioSourceService audioSource,
+        Func<Kernel> createKernel,
+        Func<ConversationalPlugin> createPlugin,
         Func<AudioStreamPlaybackService> createPlayback)
     {
         _logger = logger;
+        _joyKernel = createKernel();
+        _samKernel = createKernel();
+        _joyPlugin = createPlugin();
+        _samPlugin = createPlugin();
         _joy = createRealtime.Invoke("Joy");
         _sam = createRealtime.Invoke("Sam");
         _joyAudio = createPacer();
@@ -52,32 +66,60 @@ public class AgentToAgentRealtimePipeline : IAsyncDisposable
         _playbackSam = createPlayback();
         _playback = createPlayback();
         _createMixer = createMixer;
+        _audioSource = audioSource;
     }
+
+    public bool AutoResponse { get; set; } = true;
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         await using var mixer = _createMixer();
+        await using var mixerJoy = _createMixer();
+        await using var mixerSam = _createMixer();
+
         await mixer.StartAsync(cancellationToken);
+        await mixerJoy.StartAsync(cancellationToken);
+        await mixerSam.StartAsync(cancellationToken);
+
+        await StartRealtimeSessionAsync(_joy, _joyKernel, _joyPlugin, "Beta", _joyControlPlane).ConfigureAwait(false);
+        await StartRealtimeSessionAsync(_sam, _samKernel, _samPlugin, "Sam", _samControlPlane).ConfigureAwait(false);
+        _joy.ParticipantId = 0;
+        _sam.ParticipantId = 1;
+        var userParticipantId = 2;
+
+        mixer.Register(_joy.ParticipantId);
+        mixer.Register(_sam.ParticipantId);
+        mixerJoy.Register(_sam.ParticipantId);
+        mixerJoy.Register(userParticipantId);
+        mixerSam.Register(_joy.ParticipantId);
+        mixerSam.Register(userParticipantId);
+
+        _audioSource.Configure(24000, 1, 16);
 
         // Ensure realtime service started
-        await _joy.StartAsync(null, null, _joyControlPlane, "Joy", true, _cts.Token).ConfigureAwait(false);
-        await _sam.StartAsync(null, null, _samControlPlane, "Sam", true, _cts.Token).ConfigureAwait(false);
-        _joy.ParticipantId = 0;
-        mixer.Register(_joy.ParticipantId);
-        _sam.ParticipantId = 1;
-        mixer.Register(_sam.ParticipantId);
+        var userAudio = new TransformBlock<byte[], AudioEvent>(chunk =>
+            new AudioEvent(
+                _joyControlPlane.TurnManager.CurrentTurnId, 
+                _joyControlPlane.TurnManager.CurrentToken, 
+                new AudioData(chunk, 24000, 1, 16, Participant: userParticipantId)), _executionOptions);
 
         _playbackJoy.ResetControlPlane(_joyControlPlane);
-        _playbackJoy.Name = "Joy Playback";
+        _playbackJoy.Name = "Joy";
         _playbackSam.ResetControlPlane(_samControlPlane);
-        _playbackJoy.Name = "Sam Playback";
+        _playbackJoy.Name = "Sam";
+
+        // User blocks
+        var user = new BroadcastBlock<AudioEvent>(e => e);
+        userAudio.LinkTo(user, _linkOptions);
+        user.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
 
         // define block
-        var playbackJoy = new ActionBlock<AudioEvent>(_playbackJoy.PipelineAction, _executionOptions);
-        var playbackSam = new ActionBlock<AudioEvent>(_playbackSam.PipelineAction, _executionOptions);
         var playback = new ActionBlock<AudioEvent>(_playback.PipelineAction, _executionOptions);
+
+        mixerJoy.Out.LinkTo(_joy.In, _linkOptions);
+        mixerSam.Out.LinkTo(_sam.In, _linkOptions);
 
         _joy.Out.LinkTo(_joyAudio.In, _linkOptions);
         _joy.Out.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
@@ -85,21 +127,34 @@ public class AgentToAgentRealtimePipeline : IAsyncDisposable
         _sam.Out.LinkTo(_samAudio.In, _linkOptions);
         _sam.Out.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
 
-        _joyAudio.Out.LinkTo(_sam.In, _linkOptions);
-        _samAudio.Out.LinkTo(_joy.In, _linkOptions);
+        _joyAudio.Out.LinkTo(mixerSam.In, _linkOptions);
+        user.LinkTo(mixerSam.In, _linkOptions);
+
+        _samAudio.Out.LinkTo(mixerJoy.In, _linkOptions);
+        user.LinkTo(mixerJoy.In, _linkOptions);
 
         _joyAudio.Out.LinkTo(mixer.In, _linkOptions);
         _samAudio.Out.LinkTo(mixer.In, _linkOptions);
 
         mixer.Out.LinkTo(playback, _linkOptions);
 
-        _ = Task.Delay(TimeSpan.FromSeconds(2), _cts.Token).ContinueWith(t => 
-        {
-            _ = _joy.TriggerResponseAsync("Please start conversation.", _cts.Token);
-        });
-
         _logger.LogInformation("Realtime pipeline started (Mic -> Realtime -> Playback). Press Ctrl+C to stop.");
-        await playbackJoy.Completion;
+        try
+        {
+            // Keep feeding audio chunks into the VAD pipeline block till RunAsync is not cancelled
+            await foreach (var audioChunk in this._audioSource.GetAudioChunksAsync(_cts.Token))
+            {
+                _ = userAudio.Post(audioChunk);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            this._logger.LogInformation("Voice Chat pipeline stopping due to cancellation...");
+        }
+        finally
+        {
+            await playback.Completion;
+        }
     }
 
     private void Link<T>(
@@ -136,5 +191,21 @@ public class AgentToAgentRealtimePipeline : IAsyncDisposable
     {
         //this._logger.LogWarning($"{blockName} block: Event filtered out due to cancellation or empty.");
         return true;
+    }
+
+    private async Task StartRealtimeSessionAsync(RealtimeAudioService service, Kernel kernel, ConversationalPlugin plugin, string name, PipelineControlPlane controlPlane)
+    {
+        if (AutoResponse)
+        {
+            await service.StartAsync(null, null, controlPlane, name, AutoResponse, _cts!.Token).ConfigureAwait(false);
+        }
+        else
+        {
+            plugin.RealtimeService = service;
+            plugin.Logger = _logger;
+            var kernelPlugin = KernelPluginFactory.CreateFromObject(plugin, pluginName: nameof(ConversationalPlugin));
+            kernel.Plugins.Add(kernelPlugin);
+            await service.StartAsync(kernel, kernelPlugin, controlPlane, name, AutoResponse, _cts!.Token).ConfigureAwait(false);
+        }
     }
 }

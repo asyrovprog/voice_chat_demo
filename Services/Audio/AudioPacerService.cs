@@ -57,16 +57,8 @@ public sealed class AudioPacerService : IAsyncDisposable
 
     private async Task PaceAndPostAsync(AudioEvent audio)
     {
-        if (audio.TurnId < _currentTurn)
-        {
-            _logger.LogWarning("Dropping audio from old turn {TurnId} < {_currentTurn}. Participant: {ParticipantId}", audio.TurnId, _currentTurn, audio.Payload.Participant);
-            return;
-        }
-        if (audio.CancellationToken.IsCancellationRequested)
-        {
-            _logger.LogWarning("Cancelling audio. Participant: {ParticipantId}", audio.Payload.Participant);
-            return;
-        }
+        if (audio.TurnId < _currentTurn) return;
+        if (audio.CancellationToken.IsCancellationRequested) return;
 
         if (audio.TurnId > _currentTurn)
         {
@@ -78,22 +70,14 @@ public sealed class AudioPacerService : IAsyncDisposable
         if (wait > TimeSpan.Zero)
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, audio.CancellationToken);
-            try { await Task.Delay(wait, linked.Token).ConfigureAwait(true); } catch (OperationCanceledException) 
-            {
-                _logger.LogWarning("Cancelling audio delay. Participant: {ParticipantId}", audio.Payload.Participant);
-                return; 
-            }
+            try { await Task.Delay(wait, linked.Token).ConfigureAwait(true); } catch (OperationCanceledException) { return; }
         }
         else if (wait < TimeSpan.FromMilliseconds(-_lateToleranceMs))
         {
             _nextStart = _clock.Elapsed;
         }
 
-        if (audio.CancellationToken.IsCancellationRequested)
-        {
-            _logger.LogWarning("Cancelling audio after wait. Participant: {ParticipantId}", audio.Payload.Participant);
-            return;
-        }
+        if (audio.CancellationToken.IsCancellationRequested) return;
 
         _nextStart += audio.Payload.Duration;
         _ = _out.Post(audio);

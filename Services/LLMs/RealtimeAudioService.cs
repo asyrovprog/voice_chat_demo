@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+
 using OpenAI.Realtime;
 
 #pragma warning disable OPENAI002 // 'OpenAI.Realtime.RealtimeClient' is for evaluation purposes only and is subject to change or removal in future updates.
@@ -23,6 +25,9 @@ public class RealtimeAudioService : IDisposable
 
     private TurnManager _turnManager;
     private string _name = "";
+    private bool _automaticResponse;
+    private Kernel? _kernel;
+    private KernelPlugin? _plugin;
 
     public RealtimeAudioService(
         PipelineControlPlane controlPlane,
@@ -39,9 +44,17 @@ public class RealtimeAudioService : IDisposable
         _realtimeClient = new RealtimeClient(apiKeyCredential);
     }
 
+    public RealtimeSession? Session => _realtimeSession;
+
     public int ParticipantId { get; set; } = 0;
 
-    public async Task StartAsync(PipelineControlPlane? controlPlane, string name = "", CancellationToken cancellationToken = default)
+    public async Task StartAsync(
+        Kernel? kernel,
+        KernelPlugin? plugin,
+        PipelineControlPlane? controlPlane,
+        string name = "",
+        bool automaticResponse = true,
+        CancellationToken cancellationToken = default)
     {
         if (controlPlane != null)
         {
@@ -54,9 +67,18 @@ public class RealtimeAudioService : IDisposable
             return;
         }
 
+        _kernel = kernel;
+        _plugin = plugin;
+        _automaticResponse = automaticResponse;
         _name = name;
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _realtimeSession = await this._realtimeClient.StartConversationSessionAsync(_options.ModelId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        
+        var turnOptions = _automaticResponse
+            ? TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(SemanticEagernessLevel.Medium,
+                enableAutomaticResponseCreation: true,
+                enableResponseInterruption: true)
+            : TurnDetectionOptions.CreateServerVoiceActivityTurnDetectionOptions(enableAutomaticResponseCreation: false);
 
         var config = new ConversationSessionOptions()
         {
@@ -69,10 +91,7 @@ public class RealtimeAudioService : IDisposable
                 Prompt = _options.TranscriptInstructions,
                 Language = _options.Language,
             },
-            TurnDetectionOptions = TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(
-                eagernessLevel: SemanticEagernessLevel.High,
-                enableAutomaticResponseCreation: true,
-                enableResponseInterruption: true),
+            TurnDetectionOptions = turnOptions,
             ContentModalities = RealtimeContentModalities.Text | RealtimeContentModalities.Audio,
             Temperature = (float)_options.Temperature,
             Voice = _options.Voice,
@@ -110,9 +129,9 @@ public class RealtimeAudioService : IDisposable
         _ = Task.Run(async () => await ReceiveUpdatesAsync(_cancellationTokenSource.Token), cancellationToken).ConfigureAwait(false);
     }
 
-    public ITargetBlock<AudioEvent> AudioInput => _sendAudioBlock ?? throw new InvalidOperationException();
+    public ITargetBlock<AudioEvent> In => _sendAudioBlock ?? throw new InvalidOperationException();
 
-    public ISourceBlock<AudioEvent> AudioOutput => _audioBus ?? throw new InvalidOperationException();
+    public ISourceBlock<AudioEvent> Out => _audioBus ?? throw new InvalidOperationException();
 
     public ISourceBlock<TranscriptionEvent> TranscriptOutput => _transcriptBus ?? throw new InvalidOperationException();
 
@@ -137,6 +156,44 @@ public class RealtimeAudioService : IDisposable
         await _realtimeSession.SendInputAudioAsync(new BinaryData(audioEvent.Payload.Data), cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task ProcessInputSpeechFinishedAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (_realtimeSession != null && _automaticResponse == false)
+            {
+                var req = new ConversationResponseOptions
+                {
+                    Instructions =
+                     _options.Instructions + "\n" +
+                     "Estimate probability that you need to engage and respond to speech of other participant. Then call UpdateConversationState " +
+                     "with that probability.\nExamples:\n" +
+                     "- If other participant(s) ask to keep quiet or asks to wait probability should be low, such as 0.1\n" +
+                     "- If other participant(s) ask everyone to respond, then probability should be relatively low, such as 0.2\n" +
+                     "- If two other participants talk to each other, then probability should be low, such as 0.01\n" +
+                     "- If other participant asks you by your name to answer some question, then probability should be high, such as 0.95\n",
+                    ToolChoice = ConversationToolChoice.CreateRequiredToolChoice(),
+                    ConversationSelection = ResponseConversationSelection.Auto,
+                };
+
+                foreach (var func in _plugin!)
+                {
+                    req.Tools.Add(func.ToRealtimeTool());
+                }
+                _logger.LogInformation("Starting intelligent response evaluation based on context.");
+                await _realtimeSession.StartResponseAsync(req, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while processing input speech finished.");
+        }
+        finally
+        {
+            _logger.LogInformation("Finished intelligent response evaluation based on context.");
+        }
+    }
+
     private async Task ReceiveUpdatesAsync(CancellationToken cancellationToken = default)
     {
         if (_realtimeSession == null || _audioBus == null || _transcriptBus == null)
@@ -146,7 +203,7 @@ public class RealtimeAudioService : IDisposable
         }
 
         StringBuilder responseTranscript = new StringBuilder();
-        int audioEndMs = 0;
+        double audioEndMs = 0;
 
         try
         {
@@ -154,6 +211,26 @@ public class RealtimeAudioService : IDisposable
             {
                 switch (update)
                 {
+                    case InputAudioSpeechStartedUpdate speechStarted:
+                        _logger.LogInformation($"{_name} - Input speech started.");
+                        _turnManager.Interrupt();
+                        responseTranscript.Clear();
+                        audioEndMs = 0;
+                        break;
+
+                    case ConversationSessionConfiguredUpdate configUpdate:
+                        _logger.LogInformation($"{_name} - ConversationSessionConfiguredUpdate");
+                        break;
+
+                    case ConversationSessionStartedUpdate configUpdate:
+                        _logger.LogInformation($"{_name} - ConversationSessionStartedUpdate");
+                        break;
+
+                    case InputAudioSpeechFinishedUpdate speechFinished:
+                        _logger.LogInformation($"{_name} - Input speech finished.");
+                        await ProcessInputSpeechFinishedAsync(cancellationToken).ConfigureAwait(false);
+                        break;
+
                     case InputAudioTranscriptionDeltaUpdate transcriptDelta:
                         _logger.LogInformation($"{_name} - Transcript Delta: {transcriptDelta.Delta}");
                         break;
@@ -196,6 +273,7 @@ public class RealtimeAudioService : IDisposable
                             responseTranscript.Clear();
 
                             var audioEndTime = audioEndMs + AudioData.GetAudioDurationMs(delta.AudioBytes.Length, 24000, 1, 16);
+                            audioEndMs = audioEndTime;
 
                             _ = _audioBus.Post(new AudioEvent(
                                 _turnManager.CurrentTurnId,
@@ -209,12 +287,34 @@ public class RealtimeAudioService : IDisposable
                         break;
 
                     case OutputStreamingFinishedUpdate finishedUpdate:
-                        var data = new AudioData(new byte[24000], 24000, 1, 16, "", audioEndMs, ParticipantId);
-                        for (int i = 0; i < 10; i++)
+                        if (!string.IsNullOrEmpty(finishedUpdate.FunctionName))
                         {
-                            _ = _audioBus.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
+                            _logger.LogInformation($"[{_name}] - Tool call: {finishedUpdate.FunctionName}");
+                            await PluginUtilities.TryRunFunctionAsync(
+                                _kernel!,
+                                _plugin!,
+                                _realtimeSession!,
+                                finishedUpdate.FunctionName,
+                                finishedUpdate.FunctionCallId,
+                                finishedUpdate.FunctionCallArguments,
+                                logger: _logger,
+                                cancellationToken).ConfigureAwait(false);
                         }
-                        _logger.LogInformation($"[{_name}] - Output streaming finished.");
+                        else if (audioEndMs > 0)
+                        {
+                            var data = new AudioData(new byte[24000], 24000, 1, 16, "", (int)audioEndMs, ParticipantId);
+                            for (int i = 0; i < 5; i++)
+                            {
+                                _ = _audioBus.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
+                            }
+                            audioEndMs = 0;
+                            _logger.LogInformation($"[{_name}] - Output streaming finished.");
+                            break;
+                        }
+                        break;
+
+                    case OutputTextFinishedUpdate finishedText:
+                        _logger.LogInformation($"[{_name}] - Output text finished: {finishedText.Text}");
                         break;
 
                     case RealtimeErrorUpdate err:

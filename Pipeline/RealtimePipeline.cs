@@ -2,6 +2,7 @@
 
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 
 public class RealtimePipeline : IAsyncDisposable
 {
@@ -25,6 +26,8 @@ public class RealtimePipeline : IAsyncDisposable
     private readonly AudioPacerService _audioPacerService;
     private TurnManager _turnManager;
     private PipelineControlPlane _controlPlane;
+    private readonly Kernel _kernel;
+    private readonly ConversationalPlugin _conversationalPlugin;
 
     private CancellationTokenSource? _cts;
 
@@ -34,7 +37,8 @@ public class RealtimePipeline : IAsyncDisposable
         Func<AudioPacerService> createAudioPacer,
         Func<string, RealtimeAudioService> realtimeFactory,
         AudioStreamPlaybackService audioStreamPlaybackService,
-        AudioSchedulerService audioSchedulerService,
+        Kernel kernel,
+        ConversationalPlugin conversationalPlugin,
         PipelineControlPlane controlPlane)
     {
         _logger = logger;
@@ -44,21 +48,25 @@ public class RealtimePipeline : IAsyncDisposable
         _audioPacerService = createAudioPacer.Invoke();
         _controlPlane = controlPlane;
         _turnManager = controlPlane.TurnManager;
+        _kernel = kernel;
+        _conversationalPlugin = conversationalPlugin;
     }
+
+    public bool AutoResponse { get; set; } = true;
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         // Ensure realtime service started
-        await _realtimeAudioService.StartAsync(null, "", _cts.Token).ConfigureAwait(false);
+        await StartRealtimeSessionAsync(_realtimeAudioService, _conversationalPlugin).ConfigureAwait(false);
 
         // Reconfigure to be compatible with Realtime API, which is 24000 Hz, mono, 16-bit PCM audio
         _audioSourceService.Configure(24000, 1, 16);
 
         var audioEventBlock = new TransformBlock<byte[], AudioEvent>(chunk => new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, new AudioData(chunk, 24000, 1, 16)), _executionOptions);
-        var realtimeIn = _realtimeAudioService.AudioInput;
-        var realtimeOut = _realtimeAudioService.AudioOutput;
+        var realtimeIn = _realtimeAudioService.In;
+        var realtimeOut = _realtimeAudioService.Out;
         var pacerIn = _audioPacerService.In;
         var pacerOut = _audioPacerService.Out;
         var playback = new ActionBlock<AudioEvent>(_audioStreamPlaybackService.PipelineAction, _executionOptions);
@@ -101,5 +109,21 @@ public class RealtimePipeline : IAsyncDisposable
         _cts?.Cancel();
         _cts?.Dispose();
         _audioStreamPlaybackService?.Dispose();
+    }
+
+    private async Task StartRealtimeSessionAsync(RealtimeAudioService service, ConversationalPlugin plugin)
+    {
+        if (AutoResponse)
+        {
+            await service.StartAsync(null, null, _controlPlane, "", AutoResponse, _cts!.Token).ConfigureAwait(false);
+        }
+        else
+        {
+            plugin.RealtimeService = service;
+            plugin.Logger = _logger;
+            var kernelPlugin = KernelPluginFactory.CreateFromObject(plugin, pluginName: nameof(ConversationalPlugin));
+            _kernel.Plugins.Add(kernelPlugin);
+            await service.StartAsync(_kernel, kernelPlugin, _controlPlane, "", AutoResponse, _cts!.Token).ConfigureAwait(false);
+        }
     }
 }

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 
-public sealed class AudioSchedulerService : IAsyncDisposable
+public sealed class AxudioSchedulerService : IAsyncDisposable
 {
     private const int MarginMilliseconds = 15;
     private readonly TurnManager _turnManager;
@@ -23,7 +23,7 @@ public sealed class AudioSchedulerService : IAsyncDisposable
     private int _currentTurn = -1;
     private TimeSpan _nextStart = TimeSpan.Zero;
 
-    public AudioSchedulerService(ILogger<AudioSchedulerService> logger, PipelineControlPlane controlPlane)
+    public AxudioSchedulerService(ILogger<AxudioSchedulerService> logger, PipelineControlPlane controlPlane)
     {
         _logger = logger;
         _turnManager = controlPlane.TurnManager;
