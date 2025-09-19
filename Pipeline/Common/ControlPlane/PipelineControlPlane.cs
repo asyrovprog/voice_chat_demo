@@ -10,6 +10,11 @@ public class PipelineControlPlane
 
     #endregion
 
+    public PipelineControlPlane()
+    {
+        PipelineControlPlaneExtensions.All.Add(this);
+    }
+
     #region Wall Clock
 
     public static TimeSpan Timestamp => _stopwatch.Elapsed;
@@ -21,6 +26,16 @@ public class PipelineControlPlane
     #endregion
 
     #region Event Hub
+
+    public static bool PublishToAll(PipelineControlEvent evt)
+    {
+        bool result = true;
+        foreach (var p in PipelineControlPlaneExtensions.All)
+        {
+            result &= p.Publish(evt);
+        }
+        return result;
+    }
 
     public bool Publish(PipelineControlEvent evt) => _hub.Post(evt);
 
@@ -64,4 +79,15 @@ public class PipelineControlPlane
     }
 
     #endregion
+
+    public class ActiveSpeaker: PipelineControlEvent
+    {
+        public string? Name { get; }
+        public ActiveSpeaker(string? name) => Name = name;
+    }
+}
+
+public static class PipelineControlPlaneExtensions
+{
+    public static List<PipelineControlPlane> All = new();
 }

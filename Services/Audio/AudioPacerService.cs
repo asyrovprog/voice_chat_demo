@@ -70,7 +70,7 @@ public sealed class AudioPacerService : IAsyncDisposable
         if (wait > TimeSpan.Zero)
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, audio.CancellationToken);
-            try { await Task.Delay(wait, linked.Token).ConfigureAwait(true); } catch (OperationCanceledException) { return; }
+            await Tools.DelayNoThrow(wait, linked.Token).ConfigureAwait(false);
         }
         else if (wait < TimeSpan.FromMilliseconds(-_lateToleranceMs))
         {

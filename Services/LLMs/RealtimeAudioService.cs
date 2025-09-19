@@ -25,12 +25,16 @@ public class RealtimeAudioService : IDisposable
     private CancellationTokenSource? _cancellationTokenSource;
 
     private TurnManager _turnManager;
+    private PipelineControlPlane _controlPlane;
     private string _name = "";
     private bool _automaticResponse;
     private Kernel? _kernel;
     private KernelPlugin? _plugin;
     private TimeSpan _engagementRequestStartTime = TimeSpan.Zero;
-    private string? _turnTakingInstructions;
+    private List<ConversationTool> _conversationTools = new List<ConversationTool>();
+    private string? _currentSpeakerName = null;
+
+    // private Queue<>
 
     public RealtimeAudioService(
         PipelineControlPlane controlPlane,
@@ -42,6 +46,7 @@ public class RealtimeAudioService : IDisposable
         _turnManager = controlPlane.TurnManager;
         this._logger = logger;
         _options = options.Value;
+        _controlPlane = controlPlane;
 
         var apiKeyCredential = new ApiKeyCredential(openAIOptions.Value.ApiKey);
         _realtimeClient = new RealtimeClient(apiKeyCredential);
@@ -61,7 +66,12 @@ public class RealtimeAudioService : IDisposable
     {
         if (controlPlane != null)
         {
+            _controlPlane = controlPlane;
             _turnManager = controlPlane.TurnManager;
+            controlPlane.Subscribe<PipelineControlPlane.ActiveSpeaker>(e =>
+            {
+                _ = UpdateCurrentSpeakerAsync(e.Name, cancellationToken).ConfigureAwait(false);
+            });
         }
 
         if (_realtimeSession != null)
@@ -149,6 +159,31 @@ public class RealtimeAudioService : IDisposable
         await _realtimeSession.StartResponseAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task UpdateCurrentSpeakerAsync(string? speakerName, CancellationToken cancellationToken = default)
+    {
+        if (_currentSpeakerName == speakerName)
+        {
+            return;
+        }
+
+        if (speakerName == _name)
+        {
+            speakerName = null; // Don't send own name as current speaker
+        }
+
+        if (_realtimeSession == null)
+        {
+            _logger.LogError("Attempted to update current speaker before the RealtimeAudioService was started. Please call StartAsync() before updating current speaker.");
+            return;
+        }
+
+        _logger.LogInformation($"[{_name}] - Updating current speaker to: {speakerName}");
+        await _realtimeSession.AddItemAsync(
+            RealtimeItem.CreateUserMessage([ConversationContentPart.CreateInputTextPart($"[current_speaker_name={speakerName}]")])).ConfigureAwait(false);
+
+        _currentSpeakerName = speakerName;
+    }
+
     private async Task SendInputAudioAsync(AudioEvent audioEvent, CancellationToken cancellationToken = default)
     {
         if (_sendAudioBlock == null || _realtimeSession == null)
@@ -166,20 +201,26 @@ public class RealtimeAudioService : IDisposable
             if (_realtimeSession != null && _automaticResponse == false)
             {
                 _engagementRequestStartTime = PipelineControlPlane.Timestamp;
-                _turnTakingInstructions = _turnTakingInstructions ??
-                    File.ReadAllText(_options.Instructions) + "\n\n" +
-                    File.ReadAllText("Prompts/EngagementInstructions.md");
 
                 var req = new ConversationResponseOptions
                 {
-                    Instructions = _turnTakingInstructions,
                     ToolChoice = ConversationToolChoice.CreateRequiredToolChoice(),
-                    ConversationSelection = ResponseConversationSelection.Auto,
+                    ContentModalities = RealtimeContentModalities.Text,
+                    ConversationSelection = ResponseConversationSelection.None,
                 };
 
-                foreach (var func in _plugin!)
+                if (_conversationTools.Count == 0 && _plugin != null)
                 {
-                    req.Tools.Add(func.ToRealtimeTool());
+                    foreach (var func in _plugin)
+                    {
+                        if (func is null) continue;
+                        _conversationTools.Add(func.ToRealtimeTool());
+                    }
+                }
+
+                foreach (var func in _conversationTools)
+                {
+                    req.Tools.Add(func);
                 }
 
                 _logger.LogInformation("Starting intelligent response evaluation based on context.");
@@ -301,18 +342,11 @@ public class RealtimeAudioService : IDisposable
                         if (!string.IsNullOrEmpty(finishedUpdate.FunctionName))
                         {
                             _logger.LogInformation($"[{_name}] - Tool call: {finishedUpdate.FunctionName}. LATENCY: {PipelineControlPlane.Timestamp - _engagementRequestStartTime}");
-                            _ = PluginUtilities.TryRunFunctionAsync(
-                                _kernel!,
-                                _plugin!,
-                                _realtimeSession!,
-                                finishedUpdate.FunctionName,
-                                finishedUpdate.FunctionCallId,
-                                finishedUpdate.FunctionCallArguments,
-                                logger: _logger,
-                                cancellationToken).ConfigureAwait(false);
+                            _ = PluginUtilities.TryRunAsync(_kernel!, _plugin!, _realtimeSession!, finishedUpdate, logger: _logger, cancellationToken).ConfigureAwait(false);
                         }
                         else if (audioEndMs > 0)
                         {
+                            _controlPlane.Publish(new PipelineControlPlane.ActiveSpeaker(this._name));
                             SendSilence(TimeSpan.FromMilliseconds(audioEndMs));
                             audioEndMs = 0;
                             _logger.LogInformation($"[{_name}] - Output streaming finished.");
@@ -367,7 +401,7 @@ public class RealtimeAudioService : IDisposable
     {
         var data = new AudioData(new byte[24000], 24000, 1, 16, "", audioEndMs.TotalMilliseconds, ParticipantId);
         audioEndMs += data.Duration;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 6; i++)
         {
             _audioBus?.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
         }

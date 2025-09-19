@@ -95,7 +95,7 @@ public class AgentToAgentRealtimePipeline : IAsyncDisposable
 
         _ = Task.Delay(TimeSpan.FromSeconds(2), _cts.Token).ContinueWith(t => 
         {
-            _ = _joy.TriggerResponseAsync("Please start conversation.", _cts.Token);
+            _ = _joy.TriggerResponseAsync("Please start conversation. You are in scrum meeting with Sam.", _cts.Token);
         });
 
         _logger.LogInformation("Realtime pipeline started (Mic -> Realtime -> Playback). Press Ctrl+C to stop.");

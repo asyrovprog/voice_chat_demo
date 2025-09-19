@@ -75,4 +75,16 @@ public static class Tools
             defaultValue: null
         ).ConfigureAwait(false);
     }
+
+    public static async Task DelayNoThrow(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(true); 
+        } 
+        catch (OperationCanceledException)
+        {
+        }
+        return;
+    }
 }

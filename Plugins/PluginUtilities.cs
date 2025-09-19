@@ -4,14 +4,24 @@ using OpenAI.Realtime;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 #pragma warning disable OPENAI002
 
 public static class PluginUtilities
 {
+    public sealed class FunctionYaml
+    {
+        public string? Description { get; set; }
+        public Dictionary<string, string> Parameters { get; set; } = new(); // name -> description
+    }
+
     // --- existing helper (minor tweak: prune empty "required", map floats to "number") ---
     public static ConversationTool ToRealtimeTool(this KernelFunction f)
     {
+        var y = TryLoadYaml(f.Name);
+
         var schema = new JsonObject
         {
             ["type"] = "object",
@@ -19,21 +29,30 @@ public static class PluginUtilities
             ["required"] = new JsonArray()
         };
 
+        static string MapClrToJsonType(Type t) =>
+            t == typeof(bool) ? "boolean" :
+            t == typeof(int) ? "integer" :
+            t == typeof(long) ? "integer" :
+            t == typeof(float) ? "number" :
+            t == typeof(double) ? "number" :
+            "string";
+
         foreach (var p in f.Metadata.Parameters)
         {
-            var type =
-                p.ParameterType == typeof(bool) ? "boolean" :
-                p.ParameterType == typeof(int) ? "integer" :
-                p.ParameterType == typeof(long) ? "integer" :
-                p.ParameterType == typeof(float) ? "number" :
-                p.ParameterType == typeof(double) ? "number" :
-                "string";
+            if (p.ParameterType == null) continue;
+
+            // description: YAML > existing metadata > empty
+            var desc = (y != null && y.Parameters.TryGetValue(p.Name, out var yd)) ? yd : (p.Description ?? "");
+
+            // reflect back into SK metadata (best-effort; some SK versions allow it)
+            try { p.Description = desc; } catch { /* ignore if not supported */ }
 
             var prop = new JsonObject
             {
-                ["type"] = type,
-                ["description"] = p.Description ?? ""
+                ["type"] = MapClrToJsonType(p.ParameterType),
+                ["description"] = desc
             };
+
             ((JsonObject)schema["properties"]!).Add(p.Name, prop);
             if (p.IsRequired) ((JsonArray)schema["required"]!).Add(p.Name);
         }
@@ -44,34 +63,34 @@ public static class PluginUtilities
         var parametersJson = schema.ToJsonString();
 
         var tool = ConversationFunctionTool.CreateFunctionTool(
-            f.Name, description: 
-            f.Description, 
+            f.Name,
+            description: y?.Description ?? f.Description,
             parameters: new BinaryData(parametersJson));
 
         return tool;
     }
 
     // --- run a realtime tool call against an SK plugin ---
-    public static async Task<bool> TryRunFunctionAsync(
+    public static async Task<bool> TryRunAsync(
         Kernel kernel,
         KernelPlugin plugin,
         RealtimeSession session,
-        string functionName,
-        string functionCallId,
-        string functionCallArguments,
+        OutputStreamingFinishedUpdate update,
         ILogger? logger = null,
         CancellationToken ct = default)
     { 
         try
         {
-            logger?.LogInformation("Running function '{Function}' with args: {Args}", functionName, functionCallArguments.Replace("\n", ""));
-            await TryRunFunctionAsyncImpl(kernel, plugin, session, functionName, functionCallId, functionCallArguments, logger, ct);
-            logger?.LogInformation("Function '{Function}' completed", functionName);
+            var functionName = update.FunctionName;
+            var functionCallId = update.FunctionCallId;
+            var functionCallArguments = update.FunctionCallArguments;
+
+            await TryRunFunctionAsyncImpl(kernel, plugin, session, functionName, functionCallId, functionCallArguments, logger, ct).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Unexpected error running function '{Function}'", functionName);
+            logger?.LogError(ex, "Unexpected error running function '{Function}'", update.FunctionName);
             return false;
         }
     }
@@ -114,7 +133,7 @@ public static class PluginUtilities
         {
             // Return a tool error back to the session (optional), or just log.
             logger?.LogError(ex, "Argument parsing failed for function '{Function}'", functionName);
-            await SendToolErrorAsync(session, functionCallId, $"Argument parsing failed: {ex.Message}", ct);
+            await SendToolErrorAsync(session, functionCallId, functionName, $"Argument parsing failed: {ex.Message}", ct);
             return false;
         }
 
@@ -128,17 +147,30 @@ public static class PluginUtilities
         catch (Exception ex)
         {
             logger?.LogError(ex, "Function execution failed for '{Function}'", functionName);
-            await SendToolErrorAsync(session, functionCallId, $"Function execution failed: {ex.Message}", ct);
+            await SendToolErrorAsync(session, functionCallId, functionName, $"Function execution failed: {ex.Message}", ct);
             return false;
         }
 
         // 4) send tool result back to the realtime session
         var payload = JsonSerializer.Serialize(value);
-        await SendToolResultAsync(session, functionCallId, payload ?? "completed", ct);
+        await SendToolResultAsync(session, functionCallId, functionName, payload ?? "completed", ct);
         return true;
     }
 
     // --- helpers ---
+
+    static FunctionYaml? TryLoadYaml(string funcName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Prompts", "Functions", $"{funcName}.yaml");
+        if (!File.Exists(path)) return null;
+
+        var deserializer = new DeserializerBuilder()
+            .WithNamingConvention(CamelCaseNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .Build();
+
+        return deserializer.Deserialize<FunctionYaml>(File.ReadAllText(path));
+    }
 
     private static object? CoerceJsonToClr(JsonElement v, Type target)
     {
@@ -162,19 +194,22 @@ public static class PluginUtilities
     private static async Task SendToolResultAsync(
         RealtimeSession session,
         string functionCallId,
+        string functionName,
         string result,
         CancellationToken ct)
     {
-
-        RealtimeItem functionOutputItem = RealtimeItem.CreateFunctionCallOutput(callId: functionCallId, output: result);
-        await session.AddItemAsync(functionOutputItem, ct).ConfigureAwait(false);
+        if (!functionName.StartsWith("Update"))
+        {
+            RealtimeItem functionOutputItem = RealtimeItem.CreateFunctionCallOutput(callId: functionCallId, output: result);
+            await session.AddItemAsync(functionOutputItem, ct).ConfigureAwait(false);
+        }
     }
 
-    private static Task SendToolErrorAsync(RealtimeSession session, string functionCallId, string message, CancellationToken ct)
+    private static Task SendToolErrorAsync(RealtimeSession session, string functionCallId, string functionName, string message, CancellationToken ct)
     {
         // If your SDK has a dedicated "tool_error", use it. Otherwise send a result with an error field.
 
         var json = JsonSerializer.Serialize(new { error = message });
-        return SendToolResultAsync(session, functionCallId, json, ct);
+        return SendToolResultAsync(session, functionCallId, functionName, json, ct);
     }
 }

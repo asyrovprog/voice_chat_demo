@@ -76,75 +76,39 @@ internal static class Program
 
         Console.WriteLine("Select pipeline:\n" +
             "[1] Classic STT->Chat->TTS\n" +
-            "[2] Realtime: Automatic Response enabled.\n" +
-            "[3] Realtime: Probabilistic Response based on context.\n" +
-            "[4] Realtime: 2 Agents talk to each other with Automatic Response.\n" +
-            "[5] Realtime: Human and 2 Agents. Probabilistic Response based on context.\n");
+            "[2] Realtime: Semantic VAD Automatic Response.\n" +
+            "[3] Realtime: Semantic VAD + Turn Taking Call.\n" +
+            "[4] Realtime: 2 Agents talk. No user. Semantic VAD Automatic Response.\n" +
+            "[5] Realtime: Human and 2 Agents. Semantic VAD + Turn Taking Call.\n");
         Console.Write("\nEnter Pipeline id: ");
 
         var choice = Console.ReadLine();
-        var color = Console.ForegroundColor;
-        Console.ForegroundColor = ConsoleColor.Yellow;
         _ = int.TryParse(choice, out int mode);
         Task? t = null;
         switch (mode)
         {
             case 1:
-                Console.WriteLine(
-                    "\nClassic Voice Chat Pipeline (VAD->STT->Chat->TTS):" +
-                    "\n- Slow, yet simple and inexpective." +
-                    "\n- You can interrupt agent by voice." +
-                    "\n\nHave fun!\n\n");
-
                 var p1 = host.Services.GetRequiredService<VoiceChatPipeline>();
                 t = p1.RunAsync(cts.Token);
                 break;
 
             case 2:
-                Console.WriteLine(
-                    "\nAgent (fictionary coding agent Beta) and human." +
-                    "\n- Automatic turn detection based on speech activity." +
-                    "\n- No intelligent response. Such as still respond to 'Please keep quiet.'" + 
-                    "\n- You can interrupt agent by voice." +
-                    "\n\nHave fun!\n\n");
-
                 var p2 = host.Services.GetRequiredService<RealtimePipeline>();
                 t = p2.RunAsync(cts.Token);
                 break;
 
             case 3:
-                Console.WriteLine(
-                    "\nAgent (fictionary coding agent Beta) and human." +
-                    "\n- Automatic turn detection based on speech activity." +
-                    "\n- More intelligent engagement based on estimation of probability to respond." +
-                    "\nYou can interrupt agent by voice." +
-                    "\n\nHave fun!\n\n");
-
                 var p2_1 = host.Services.GetRequiredService<RealtimePipeline>();
                 p2_1.AutoResponse = false;
                 t = p2_1.RunAsync(cts.Token);
                 break;
 
             case 4:
-                Console.WriteLine(
-                    "\n2 Agents (fictionary coding agents Beta and Sam) Realtime Pipeline." +
-                    "\nAutomatic turn detection based on voice activity." +
-                    "\nAgents CANNOT hear you they just talk to each other." +
-                    "\n\nHave fun!\n\n");
-
                 var p3 = host.Services.GetRequiredService<AgentToAgentRealtimePipeline>();
                 t = p3.RunAsync(cts.Token);
                 break;
 
             case 5:
-                Console.WriteLine(
-                    "\n2 Agents (fictionary coding agents Beta and Sam) and Human Pipeline." +
-                    "\n- Automatic turn detection based on voice activity." +
-                    "\n- More intelligent engagement based on estimation of probability to respond." +
-                    "\n- Agents can hear you." +
-                    "\n- You can interrupt agent by voice." +
-                    "\n\nHave fun!\n\n");
-
                 var p4 = host.Services.GetRequiredService<HumanWithAgentsRealtimePipeline>();
                 p4.AutoResponse = false;
                 await p4.RunAsync(cts.Token);
@@ -157,8 +121,8 @@ internal static class Program
 
         if (t != null)
         {
-            Console.ForegroundColor = color;
-            await t;
+            Console.WriteLine("\nHave fun!\n");
+            await t.ConfigureAwait(false);
             Console.WriteLine("\nExiting. Bye!");
         }
     }

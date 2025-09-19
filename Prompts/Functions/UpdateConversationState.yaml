@@ -1,0 +1,66 @@
+﻿description: |
+  Decide whether to start speaking by estimating P(addressed) for the latest utterance.
+
+  Human guidance
+  --------------
+  - Positive cues (examples): direct address or @mention; direct second-person request
+    (“can you…”, “please…”); group scrum/standup trigger (“scrum”, “standup”, “status update”,
+    “yesterday today blockers”, “report your progress”, “who wants to report”, “give your update”);
+    general request clearly in-domain.
+  - Negative cues (examples): addressed to someone else; pure presence/greeting without trigger
+    (“hello”, “can you hear me”); “wait/mute/do not answer”; likely echo of assistant speech; pure
+    acknowledgments (“thanks”, “ok”, “got it”) with no name.
+  - Conflict policy: prefer the lower band when cues disagree, unless a group trigger is present.
+    If ambiguous, bias low (≤ 0.30).
+
+  Output contract (for the calling policy)
+  ----------------------------------------
+  - The runtime will call UpdateConversationState once with JSON: {"probability": <0..1>, "reason": "<cue_id>"}
+  - No additional chat output in this turn.
+
+parameters:
+  probability: |
+    Probability in [0.0, 1.0] that THIS agent is being addressed now.
+
+    Calibration hints
+    -----------------
+    - direct_address:           0.90–0.98
+    - direct_second_person:     0.75–0.90
+    - group_trigger:            0.35–0.55
+    - in_domain:                0.45–0.65
+    - presence_greeting:        0.05–0.20
+    - direct_address_other:     0.01–0.10
+    - quiet_wait:               0.00–0.05
+    - echo_filler:              0.00–0.05
+
+    Decision rules
+    --------------
+    - If a group trigger is present, prefer the group_trigger band even if the utterance is a question.
+    - When signals conflict, choose the lower probability unless a group trigger is present.
+    - If still ambiguous, bias low (≤ 0.30).
+
+    Examples (calibration only; not executable)
+    -------------------------------------------
+    - "Who wants to report for scrum?"         → 0.40–0.50
+    - "Scrum update please."                   → 0.75–0.90
+    - "Sam, scrum update."                     → 0.90–0.98
+    - "Can anyone hear me?"                    → 0.05–0.20
+
+  reason: |
+    One cue id (controlled vocabulary). Use exactly one:
+
+    enum: [direct_address, direct_second_person, group_trigger, in_domain,
+           presence_greeting, direct_address_other, quiet_wait, echo_filler,
+           positive_other, negative_other]
+
+    bands:
+      direct_address:           0.90-0.98
+      direct_second_person:     0.75-0.90
+      group_trigger:            0.35-0.55
+      in_domain:                0.45-0.65
+      presence_greeting:        0.05-0.20
+      direct_address_other:     0.01-0.10
+      quiet_wait:               0.00-0.05
+      echo_filler:              0.00-0.05
+      positive_other:           0.30-0.60
+      negative_other:           0.00-0.20

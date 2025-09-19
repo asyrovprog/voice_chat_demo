@@ -13,15 +13,8 @@ public class ConversationalPlugin
     public RealtimeAudioService? RealtimeService { get; set; }
     public ILogger Logger { get; set; }
 
-    [KernelFunction,
-     Description("Based on provided probability that you need to respond to participant speech this function returns true if response starts.")]
-    public bool UpdateConversationState(
-        [Description("Probability value between 0.0 and 1.0 that you are addressed and needs to respond.")] 
-        float probability,
-
-        [Description("Reason for probability. Such as 'I called by name' or 'Participant asked to wait'")]
-        string? reason = null
-        )
+    [KernelFunction] // descriptions loaded from Prompts/Functions/UpdateConversationState.yaml
+    public bool UpdateConversationState(float probability, string? reason = null)
     {
         Logger?.LogInformation($"{nameof(UpdateConversationState)} called with probability to respond {probability}. Reason: {reason}.");
 

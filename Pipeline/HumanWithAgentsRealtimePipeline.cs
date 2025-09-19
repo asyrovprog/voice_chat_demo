@@ -5,7 +5,11 @@ using Microsoft.SemanticKernel;
 
 using NAudio.Mixer;
 
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading.Tasks.Dataflow;
+
+using WebRtcVadSharp;
 
 public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
 {
@@ -38,6 +42,7 @@ public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
     private readonly Kernel _samKernel;
     private readonly ConversationalPlugin _joyPlugin;
     private readonly ConversationalPlugin _samPlugin;
+    private readonly WebRtcVad _vad = new() { OperatingMode = OperatingMode.VeryAggressive };
 
 
     private CancellationTokenSource? _cts;
@@ -98,7 +103,6 @@ public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
 
         _audioSource.Configure(24000, 1, 16);
 
-        // Ensure realtime service started
         var userAudio = new TransformBlock<byte[], AudioEvent>(chunk =>
             new AudioEvent(
                 _joyControlPlane.TurnManager.CurrentTurnId, 
@@ -110,12 +114,10 @@ public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
         _playbackSam.ResetControlPlane(_samControlPlane);
         _playbackJoy.Name = "Sam";
 
-        // User blocks
         var user = new BroadcastBlock<AudioEvent>(e => e);
         userAudio.LinkTo(user, _linkOptions);
         user.LinkTo(DataflowBlock.NullTarget<AudioEvent>(), _linkOptions);
 
-        // define block
         var playback = new ActionBlock<AudioEvent>(_playback.PipelineAction, _executionOptions);
 
         mixerJoy.Out.LinkTo(_joy.In, _linkOptions);
@@ -142,8 +144,21 @@ public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
         try
         {
             // Keep feeding audio chunks into the VAD pipeline block till RunAsync is not cancelled
+            var voicedFrameCount = 0;
             await foreach (var audioChunk in this._audioSource.GetAudioChunksAsync(_cts.Token))
             {
+                if (HasVoice(audioChunk))
+                {
+                    voicedFrameCount++;
+                    if (voicedFrameCount == 5)
+                    {
+                        PipelineControlPlane.PublishToAll(new PipelineControlPlane.ActiveSpeaker("Andrew"));
+                    }
+                }
+                else
+                {
+                    voicedFrameCount = 0;
+                }
                 _ = userAudio.Post(audioChunk);
             }
         }
@@ -207,5 +222,32 @@ public class HumanWithAgentsRealtimePipeline : IAsyncDisposable
             kernel.Plugins.Add(kernelPlugin);
             await service.StartAsync(kernel, kernelPlugin, controlPlane, name, AutoResponse, _cts!.Token).ConfigureAwait(false);
         }
+    }
+
+    private bool HasVoice(byte[] src)
+    {
+        var dst = new byte[src.Length * 2];
+        // Guard: need even byte counts (16-bit samples)
+        if ((src.Length & 1) == 1) src = src[..(src.Length - 1)];
+        var sIn = MemoryMarshal.Cast<byte, short>(src);           // interpret as 16-bit samples
+        var sOut = MemoryMarshal.Cast<byte, short>(dst);           // where we write samples
+
+        if (sOut.Length < sIn.Length * 2) throw new ArgumentException("dst too small");
+
+        int j = 0;
+        for (int i = 0; i < sIn.Length - 1; i++)
+        {
+            short a = sIn[i];
+            short b = sIn[i + 1];
+            sOut[j++] = a;                      // original
+            sOut[j++] = (short)((a + b) / 2);   // simple linear interpolation
+        }
+
+        // Pad the last pair
+        short last = sIn[^1];
+        sOut[j++] = last;
+        sOut[j++] = last;
+
+        return _vad.HasSpeech(dst, SampleRate.Is48kHz, FrameLength.Is20ms);
     }
 }

@@ -83,6 +83,8 @@ public class RealtimePipeline : IAsyncDisposable
 
         _logger.LogInformation("Realtime pipeline started (Mic -> Realtime -> Playback). Press Ctrl+C to stop.");
 
+        await _realtimeAudioService.UpdateCurrentSpeakerAsync("Andrew", _cts.Token).ConfigureAwait(false);
+
         try
         {
             await foreach (var chunk in _audioSourceService.GetAudioChunksAsync(_cts.Token).ConfigureAwait(false))

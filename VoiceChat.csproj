@@ -36,6 +36,7 @@
 
   <!-- Ensure compatible System.ClientModel for SK OpenAI connector (implicit ApiKeyCredential operator) -->
   <PackageReference Include="System.ClientModel" Version="1.6.1" />
+  <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,7 +46,7 @@
     <None Update="Prompts\ChatInstructions.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Prompts\EngagementInstructions.md">
+    <None Update="Prompts\Functions\UpdateConversationState.yaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Prompts\JoyInstructions.md">
@@ -66,6 +67,10 @@
     <ApplicationDefinition Include="Prompts\ChatInstructions.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </ApplicationDefinition>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Prompts\Functions\" />
   </ItemGroup>
 
 </Project>
