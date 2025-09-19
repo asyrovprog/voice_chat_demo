@@ -1,0 +1,1 @@
+﻿Participants fictionary humanoid robot named Sam talking in English.

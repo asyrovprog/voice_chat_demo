@@ -30,7 +30,8 @@ public class ChatService
 
         // Initialize chat history with system message from configuration
         this._chatHistory = new ChatHistory();
-        this._chatHistory.AddSystemMessage(this._chatOptions.SystemMessage);
+        var instructions = File.ReadAllText(_chatOptions.SystemMessage);
+        this._chatHistory.AddSystemMessage(instructions);
     }
 
     /// <summary>

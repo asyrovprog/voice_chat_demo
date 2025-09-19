@@ -1,6 +1,7 @@
-// Copyright (c) Microsoft. All rights reserved.
+﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System.ClientModel;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,8 @@ public class RealtimeAudioService : IDisposable
     private bool _automaticResponse;
     private Kernel? _kernel;
     private KernelPlugin? _plugin;
+    private TimeSpan _engagementRequestStartTime = TimeSpan.Zero;
+    private string? _turnTakingInstructions;
 
     public RealtimeAudioService(
         PipelineControlPlane controlPlane,
@@ -73,27 +76,27 @@ public class RealtimeAudioService : IDisposable
         _name = name;
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _realtimeSession = await this._realtimeClient.StartConversationSessionAsync(_options.ModelId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
-        var turnOptions = _automaticResponse
-            ? TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(SemanticEagernessLevel.Medium,
-                enableAutomaticResponseCreation: true,
-                enableResponseInterruption: true)
-            : TurnDetectionOptions.CreateServerVoiceActivityTurnDetectionOptions(enableAutomaticResponseCreation: false);
+
+        var turnOptions = 
+            TurnDetectionOptions.CreateSemanticVoiceActivityTurnDetectionOptions(
+                SemanticEagernessLevel.High,
+                enableAutomaticResponseCreation: _automaticResponse,
+                enableResponseInterruption: true);
 
         var config = new ConversationSessionOptions()
         {
-            Instructions = _options.Instructions,
+            Instructions = File.ReadAllText(_options.Instructions),
             InputAudioFormat = RealtimeAudioFormat.Pcm16,
             OutputAudioFormat = RealtimeAudioFormat.Pcm16,
             InputTranscriptionOptions = new InputTranscriptionOptions
             {
                 Model = "whisper-1",
-                Prompt = _options.TranscriptInstructions,
+                Prompt = File.ReadAllText(_options.TranscriptInstructions),
                 Language = _options.Language,
             },
             TurnDetectionOptions = turnOptions,
             ContentModalities = RealtimeContentModalities.Text | RealtimeContentModalities.Audio,
-            Temperature = (float)_options.Temperature,
+            Temperature = (float) _options.Temperature,
             Voice = _options.Voice,
         };
 
@@ -162,16 +165,14 @@ public class RealtimeAudioService : IDisposable
         {
             if (_realtimeSession != null && _automaticResponse == false)
             {
+                _engagementRequestStartTime = PipelineControlPlane.Timestamp;
+                _turnTakingInstructions = _turnTakingInstructions ??
+                    File.ReadAllText(_options.Instructions) + "\n\n" +
+                    File.ReadAllText("Prompts/EngagementInstructions.md");
+
                 var req = new ConversationResponseOptions
                 {
-                    Instructions =
-                     _options.Instructions + "\n" +
-                     "Estimate probability that you need to engage and respond to speech of other participant. Then call UpdateConversationState " +
-                     "with that probability.\nExamples:\n" +
-                     "- If other participant(s) ask to keep quiet or asks to wait probability should be low, such as 0.1\n" +
-                     "- If other participant(s) ask everyone to respond, then probability should be relatively low, such as 0.2\n" +
-                     "- If two other participants talk to each other, then probability should be low, such as 0.01\n" +
-                     "- If other participant asks you by your name to answer some question, then probability should be high, such as 0.95\n",
+                    Instructions = _turnTakingInstructions,
                     ToolChoice = ConversationToolChoice.CreateRequiredToolChoice(),
                     ConversationSelection = ResponseConversationSelection.Auto,
                 };
@@ -180,6 +181,7 @@ public class RealtimeAudioService : IDisposable
                 {
                     req.Tools.Add(func.ToRealtimeTool());
                 }
+
                 _logger.LogInformation("Starting intelligent response evaluation based on context.");
                 await _realtimeSession.StartResponseAsync(req, cancellationToken).ConfigureAwait(false);
             }
@@ -204,6 +206,7 @@ public class RealtimeAudioService : IDisposable
 
         StringBuilder responseTranscript = new StringBuilder();
         double audioEndMs = 0;
+        TimeSpan speechFinishedTime = TimeSpan.Zero;
 
         try
         {
@@ -228,7 +231,8 @@ public class RealtimeAudioService : IDisposable
 
                     case InputAudioSpeechFinishedUpdate speechFinished:
                         _logger.LogInformation($"{_name} - Input speech finished.");
-                        await ProcessInputSpeechFinishedAsync(cancellationToken).ConfigureAwait(false);
+                        speechFinishedTime = PipelineControlPlane.Timestamp;
+                        _ = ProcessInputSpeechFinishedAsync(cancellationToken);
                         break;
 
                     case InputAudioTranscriptionDeltaUpdate transcriptDelta:
@@ -259,14 +263,21 @@ public class RealtimeAudioService : IDisposable
                             _logger.LogDebug($"[{_name}] - {nameof(RealtimeAudioService)} Transcript Delta: {delta.AudioTranscript}, {common}");
                             responseTranscript.Append(delta.AudioTranscript);
 
-                            await _transcriptBus.SendAsync(new TranscriptionEvent(
+                            _ = _transcriptBus.Post(new TranscriptionEvent(
                                 _turnManager.CurrentTurnId,
                                 _turnManager.CurrentToken,
-                                delta.AudioTranscript), cancellationToken).ConfigureAwait(false);
+                                delta.AudioTranscript));
                         }
 
                         if (delta.AudioBytes != null)
                         {
+                            if (speechFinishedTime != TimeSpan.Zero)
+                            {
+                                var latency = PipelineControlPlane.Timestamp - speechFinishedTime;
+                                _logger.LogInformation($"[{_name}] - LATENCY: Input speech finished to audio response started: {latency.TotalMilliseconds} ms");
+                                speechFinishedTime = TimeSpan.Zero;
+                            }
+
                             _logger.LogDebug($"[{_name}] - {nameof(RealtimeAudioService)} Audio Length: {delta.AudioBytes.Length}, Audio Max: {delta.AudioBytes.ToArray().Max()}, {common}");
 
                             var transcript = responseTranscript.ToString();
@@ -289,8 +300,8 @@ public class RealtimeAudioService : IDisposable
                     case OutputStreamingFinishedUpdate finishedUpdate:
                         if (!string.IsNullOrEmpty(finishedUpdate.FunctionName))
                         {
-                            _logger.LogInformation($"[{_name}] - Tool call: {finishedUpdate.FunctionName}");
-                            await PluginUtilities.TryRunFunctionAsync(
+                            _logger.LogInformation($"[{_name}] - Tool call: {finishedUpdate.FunctionName}. LATENCY: {PipelineControlPlane.Timestamp - _engagementRequestStartTime}");
+                            _ = PluginUtilities.TryRunFunctionAsync(
                                 _kernel!,
                                 _plugin!,
                                 _realtimeSession!,
@@ -302,11 +313,7 @@ public class RealtimeAudioService : IDisposable
                         }
                         else if (audioEndMs > 0)
                         {
-                            var data = new AudioData(new byte[24000], 24000, 1, 16, "", (int)audioEndMs, ParticipantId);
-                            for (int i = 0; i < 5; i++)
-                            {
-                                _ = _audioBus.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
-                            }
+                            SendSilence(TimeSpan.FromMilliseconds(audioEndMs));
                             audioEndMs = 0;
                             _logger.LogInformation($"[{_name}] - Output streaming finished.");
                             break;
@@ -354,5 +361,15 @@ public class RealtimeAudioService : IDisposable
 
         _realtimeSession?.Dispose();
         _realtimeSession = null;
+    }
+
+    private void SendSilence(TimeSpan audioEndMs)
+    {
+        var data = new AudioData(new byte[24000], 24000, 1, 16, "", audioEndMs.TotalMilliseconds, ParticipantId);
+        audioEndMs += data.Duration;
+        for (int i = 0; i < 3; i++)
+        {
+            _audioBus?.Post(new AudioEvent(_turnManager.CurrentTurnId, _turnManager.CurrentToken, data));
+        }
     }
 }

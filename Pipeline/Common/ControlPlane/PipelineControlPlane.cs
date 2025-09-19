@@ -5,14 +5,14 @@ public class PipelineControlPlane
 {
     #region Fields
 
-    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private static readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private readonly BroadcastBlock<PipelineControlEvent> _hub = new(e => e);
 
     #endregion
 
     #region Wall Clock
 
-    public TimeSpan Timestamp => _stopwatch.Elapsed;
+    public static TimeSpan Timestamp => _stopwatch.Elapsed;
 
     public Task DelayAsync(TimeSpan delay, CancellationToken ct = default) => Task.Delay(delay, ct);
 
